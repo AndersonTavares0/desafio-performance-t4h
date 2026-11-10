@@ -6,7 +6,7 @@
 
 ## 1. Resumo
 
-Uma API em Node.js e PostgreSQL operava sob lentidão severa com 20 usuários virtuais, atingindo 3,62 req/s, p95 de 17,9 s e saturação de 97,1% da CPU do banco. Identificou-se sobrecarga de conexões sem pool, ausência de índices em chaves estrangeiras e transferência massiva de dados para agregação no Node.js. Implementou-se pool de conexões (`pg.Pool`), 6 índices B-tree estratégicos e pushdown de agregação SQL. A vazão subiu 8x (29,02 req/s) e a latência mediana caiu de 1.248 ms para 26,5 ms (-97,9%), com custo zero de infraestrutura e contrato 100% preservado.
+Uma API em Node.js e PostgreSQL sofria com lentidão sob 20 usuários virtuais: 3,62 req/s, p95 de 17,9 s e saturação de 97,1% da CPU do banco. O diagnóstico revelou conexões sem pool, ausência de índices em chaves estrangeiras e transferência de dados brutos para agregação no Node.js. Aplicou-se connection pool (`pg.Pool`), 6 índices B-tree estratégicos e pushdown de agregação SQL. A vazão subiu 8x (29,02 req/s) e a latência mediana caiu de 1.248 ms para 26,5 ms (-97,9%), a custo zero de infraestrutura e com contrato 100% preservado.
 
 ## 2. Contexto e diagnóstico
 
@@ -28,10 +28,10 @@ Hipóteses de causa:
 O PostgreSQL aloca um processo dedicado por sessão via `fork()`. A documentação oficial (Cap. 20) e a do `node-postgres` explicam que clientes efêmeros acarretam alocação de sockets, autenticação e catálogos locais a cada requisição. O Connection Pooling preserva conexões abertas para atender consultas em fila, reduzindo latência e consumo de descritores de arquivo.
 
 ### Indexação B-Tree em Relacionamentos e Expressões
-Graefe (2011) demonstra que o acesso por árvore B tem custo O(log N), contra O(N) da varredura sequencial. Garcia-Molina et al. (2008) destacam que consultas sem índices secundários forçam varreduras completas ou tabelas hash volumosas. A documentação do PostgreSQL 16 (Cap. 11) adverte que restrições `REFERENCES` não são indexadas automaticamente. Ademais, para filtros case-insensitive (`lower(email)`), índices funcionais viabilizam busca indexada direta.
+Graefe (2011) demonstra que a árvore B tem custo O(log N), contra O(N) da varredura sequencial. Garcia-Molina et al. (2008) destacam que consultas sem índices secundários forçam varreduras completas. A documentação do PostgreSQL 16 (Cap. 11) adverte que chaves `REFERENCES` não são indexadas automaticamente, e que filtros case-insensitive (`lower(email)`) demandam índices funcionais.
 
 ### Pushdown de Agregação e Eficiência de I/O
-O princípio de pushdown computation estabelece que agregações devem ocorrer no motor de armazenamento (Garcia-Molina et al., 2008). O PostgreSQL possui funções nativas (`COUNT`, `SUM`, `GROUP BY`) vetorizadas em C (Cap. 9.21). Agregar no banco comprime dezenas de milhares de registros em poucas linhas, reduzindo tráfego de rede e liberando o Event Loop do Node.js (Node.js LTS Docs).
+O princípio de pushdown computation estabelece que agregações devem ocorrer no motor de dados (Garcia-Molina et al., 2008). O PostgreSQL possui funções nativas (`COUNT`, `SUM`, `GROUP BY`) vetorizadas em C (Cap. 9.21). Agregar no banco comprime dezenas de milhares de registros em poucas tuplas, reduzindo tráfego de rede e liberando o Event Loop da API (Node.js LTS Docs).
 
 ## 4. Alternativas consideradas
 
@@ -67,19 +67,19 @@ Cada mudança seguiu o protocolo oficial (3 baterias de 60s com 20 VUs, calculan
 O resultado consolidado final alcançou **29,02 req/s** (**+701,7%** vs. base de 3,62 req/s) e latência mediana de **26,5 ms** (contra 1.248,0 ms na base), preservando todas as 42 respostas da aplicação original.
 
 **O que não funcionou e limitações dos ganhos:**  
-O pool de conexões isolado não aliviou a CPU do banco (recuo sutil de 97,1% para 96,3%), pois não resolve varreduras sequenciais. Já o pushdown SQL não reduziu o p95 global (manteve-se em ~4,4 s), pois a cauda continuou dominada pela rota não indexada `/relatorios/top-produtos` (~4,7 s), demonstrando que pushdown desonera a aplicação, mas não substitui cache em rotas analíticas pesadas.
+O pool de conexões isolado não aliviou a CPU do banco (recuo sutil de 97,1% para 96,3%), pois não resolve varreduras sequenciais. Já o pushdown SQL não reduziu o p95 global (manteve-se em ~4,4 s), pois a cauda de latência continuou governada pelas consultas com paginação profunda via OFFSET em `/pedidos` (páginas até 1.000 com p95 de ~10 s) e pelo somatório de 1,5 milhão de itens em `/relatorios/top-produtos` (~4,7 s). Isso comprova que pushdown em `vendas-por-dia` desonera o runtime da API, mas não resolve gargalos de paginação por offset nem de agregação global sem amortização de cache.
 
 ![p95 antes e depois de cada mudança](img/p95-por-mudanca.png)
 
 ## 7. Limites e testes futuros
 
-A solução apresenta os seguintes limites operacionais e considerações metodológicas:
-1. **Sobrecarga em Escritas:** Os 6 índices B-tree ocupam ~62 MiB e introduzem manutenção de páginas em `INSERT`/`UPDATE`. Sob tráfego com predominância de escritas, esse trade-off deve ser reavaliado.
+A solução apresenta os seguintes limites e considerações metodológicas:
+1. **Sobrecarga em Escrita:** Os 6 índices ocupam ~62 MiB e geram manutenção de páginas em `INSERT`/`UPDATE`, exigindo reavaliação sob cargas com predominância de escrita.
 2. **Busca Textual sem Índice:** A rota `/produtos/busca` ainda utiliza `ILIKE '%termo%'`, exigindo varredura sequencial em 20 mil produtos.
-3. **Amostragem Estatística:** Adotou-se rigorosamente a amostra de 3 baterias (n=3) conforme estipulado pelo protocolo do desafio. Em ambientes de produção com ruído de rede, recomenda-se estender a amostragem para n >= 5, calculando o Coeficiente de Variação (CV < 5%) e Intervalo de Confiança a 95% (IC 95%) para descartar variações do escalonador.
+3. **Amostragem Estatística:** Seguiu-se o protocolo de 3 baterias (n=3) do desafio. Em produção com ruído de rede, recomenda-se n >= 5, calculando Coeficiente de Variação (CV < 5%) e Intervalo de Confiança a 95% (IC 95%).
 
 **O que refutaria a conclusão:**  
-Nossa conclusão seria refutada se uma carga mista com alta concorrência de escritas gerasse contenção severa de locks nas árvores B, ou se o catálogo de produtos crescesse em ordens de grandeza tornando o `ILIKE` o gargalo dominante.
+Nossa conclusão seria refutada se uma carga mista gerasse contenção severa de locks nas árvores B, ou se o catálogo crescesse tornando o `ILIKE` o gargalo dominante.
 
 Testes futuros priorizados em [proximos-testes.md](../proximos-testes.md):
 - Índice GIN trigrama (`pg_trgm`) para acelerar buscas textuais.

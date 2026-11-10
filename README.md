@@ -72,6 +72,7 @@ As rotas sob o prefixo `/relatorios` possuem comportamento analítico distinto d
 
 ```
 desafio-performance-t4h/
+├── .github/workflows/ci.yml   # CI/CD no GitHub Actions (checagem sintática e contrato)
 ├── AGENTS.md                  # instruções para agentes de IA
 ├── CLAUDE.md                  # diretrizes de governança e regras do autor
 ├── docker-compose.yml         # API, banco e as ferramentas de medição
@@ -88,9 +89,13 @@ desafio-performance-t4h/
 ├── proximos-testes.md         # catálogo de intervenções futuras priorizadas
 ├── artigo/
 │   ├── artigo.md              # artigo técnico-científico com metodologia e resultados
-│   └── img/                   # gráficos e diagramas do artigo
+│   ├── gerar_grafico.py       # script reprodutível para renderização do gráfico
+│   └── img/                   # gráficos e diagramas do artigo (300 DPI)
 └── resultados/                # pastas com os dados brutos de cada medição
 ```
+
+> **Distinção Metodológica entre CI e Benchmarking:**  
+> O pipeline automatizado do GitHub Actions é restrito à **validação funcional de contrato** (42 casos) e análise estática de sintaxe. A reprodução das **medições estatísticas de carga (k6)** deve ser conduzida localmente em ambiente dedicado com `scripts/medir.sh`, pois runners em nuvem multi-inquilino introduzem ruído de virtualização (*noisy neighbors*) que distorce medições de cauda (p95 e p99).
 
 ---
 
