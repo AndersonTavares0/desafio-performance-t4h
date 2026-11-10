@@ -20,7 +20,7 @@ Três baterias de testes na aplicação original ([20261110-095041-00-linha-de-b
 
 Investigações estruturadas (salvas em [diagnostico/](../diagnostico/)) revelaram três causas críticas:
 1. **Conexões Efêmeras sem Pooling:** `api/src/db.js` criava um `new pg.Client()` por consulta. Como o PostgreSQL adota modelo baseado em processos via `fork()`, o ciclo contínuo de handshake TCP, autenticação e criação de processos consumia excessivamente o escalonador do SO ([02-conexao-e-pooling.txt](../diagnostico/02-conexao-e-pooling.txt)), atingindo até 30 forks por requisição em `/clientes/:id/pedidos`.
-2. **Varreduras Sequenciais em Chaves Estrangeiras:** O `EXPLAIN (ANALYZE, BUFFERS)` revelou ausência de índices secundários nas colunas de relacionamento ([01-explain-queries-linha-de-base.txt](../diagnostico/01-explain-queries-linha-de-base.txt)). A filtragem por `pedidos.cliente_id` varria 500.000 tuplas (`Seq Scan`), e a busca por `itens_pedido.pedido_id` varria 1.500.000 tuplas, elevando a rota `/clientes/:id/pedidos` a 11.744 ms de latência.
+2. **Varreduras Sequenciais em Chaves Estrangeiras:** O `EXPLAIN (ANALYZE, BUFFERS)` revelou ausência de índices secundários nas colunas de relacionamento ([01-explain-queries-linha-de-base.txt](../diagnostico/01-explain-queries-linha-de-base.txt)). A filtragem por `pedidos.cliente_id` varria 500.000 tuplas (`Seq Scan`), e a busca por `itens_pedido.pedido_id` varria 1.500.000 tuplas, elevando a rota `/clientes/:id/pedidos` a 15.252 ms de latência mediana.
 3. **Agregação em Memória na Aplicação:** A rota `/relatorios/vendas-por-dia` transferia dezenas de milhares de registros completos para o Node.js agrupar e somar valores com instâncias de `Map` em JavaScript, onerando o Event Loop e gerando pico de consumo de memória.
 
 ---
@@ -58,17 +58,17 @@ Cada estado do sistema foi medido em triplicata sob condições ambientais está
 
 | Intervenção | Vazão (req/s) | $\Delta$ vs. Base | Latência Mediana | Latência p95 | CPU Banco | CPU API | RAM API | Contrato |
 |---|---|---|---|---|---|---|---|---|
-| **00. Linha de Base** | 3,62 | — | 1.248,0 ms | 17.932,0 ms | 97,1% | 5,0% | 23,2 MiB | 42/42 |
-| **01. Connection Pool** | 4,81 | +32,9% | 802,0 ms | 13.320,5 ms | 96,3% | 4,9% | 24,1 MiB | 42/42 |
-| **02. Índices B-Tree** | 28,23 | +679,8% | 82,1 ms | 4.408,9 ms | 86,9% | 20,9% | 58,1 MiB | 42/42 |
+| **00. Linha de Base** | 3,62 | — | 1.248,0 ms | 17.932,0 ms | 97,1% | 5,0% | 33,7 MiB | 42/42 |
+| **01. Connection Pool** | 4,81 | +32,9% | 802,0 ms | 13.320,5 ms | 96,3% | 4,9% | 40,8 MiB | 42/42 |
+| **02. Índices B-Tree** | 28,23 | +679,8% | 82,1 ms | 4.408,9 ms | 86,9% | 20,9% | 58,3 MiB | 42/42 |
 | **03. Pushdown SQL** | 29,02 | +701,7% | 26,5 ms | 4.428,0 ms | 89,1% | 3,1% | 26,4 MiB | 42/42 |
 
 *Fontes dos dados:* Rodadas de resultados arquivadas em [00-linha-de-base](../resultados/20261110-095041-00-linha-de-base/), [01-connection-pool](../resultados/20261110-100637-01-connection-pool/), [02-indices-banco](../resultados/20261110-101549-02-indices-banco/) e [03-pushdown-agregacao](../resultados/20261110-102601-03-pushdown-agregacao/).
 
 ### Impacto nas Rotas Críticas
-- **`/clientes/:id/pedidos`:** A latência mediana caiu de 11.744,0 ms na linha de base para 66,9 ms após a indexação (redução de 99,4%), demonstrando a eficácia da conversão de Seq Scan para Index Scan.
-- **`/clientes/:id`:** O pooling reduziu a latência de 297,1 ms para 5,6 ms, comprovando a remoção do gargalo de conexão.
-- **`/relatorios/vendas-por-dia`:** O pushdown SQL descarregou o Node.js: a CPU da API recuou de 20,9% para 3,1% (-85,2%) e a memória média caiu de 58,1 MiB para 26,4 MiB.
+- **`/clientes/:id/pedidos`:** A latência mediana caiu de 15.252,4 ms na linha de base para 66,9 ms na intervenção final (redução de 99,6%), demonstrando a eficácia da conversão de Seq Scan para Index Scan.
+- **`/clientes/:id`:** O pooling reduziu a latência de 296,9 ms na base para 88,1 ms no pool e finalmente 5,6 ms, comprovando a remoção do gargalo de conexão.
+- **`/relatorios/vendas-por-dia`:** O pushdown SQL descarregou o Node.js: a CPU média da API recuou de 20,9% para 3,1% (-85,2%) e a memória média caiu de 58,3 MiB para 26,4 MiB.
 - **Preservação de Contrato:** Todas as medições atestaram conformidade estrita (42/42 respostas idênticas).
 
 ---
