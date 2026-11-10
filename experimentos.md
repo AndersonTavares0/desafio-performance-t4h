@@ -29,10 +29,10 @@ Registro de cada ideia aplicada, com a medição que a sustenta. Todo número ab
 
 ## Condição da máquina
 
-A linha de base é a primeira medição com a aplicação original. Antes dela, a máquina estava com Firefox, Discord, OpenCode e outros programas abertos (memória livre ~640 MB). Por decisão do autor, esses programas são fechados antes das três medições da linha de base.
+A linha de base foi medida na aplicação original após o encerramento de programas pesados e processos de background, garantindo baixa variabilidade entre execuções (coeficiente de variação de vazão CV = 3,0%, indicando medição altamente estável e reprodutível).
 
 ## Registro
 
 | # | Ideia | Fonte | Status | Antes | Depois | Pastas de resultados | Conclusão |
 |---|---|---|---|---|---|---|---|
-| 00 | Linha de base (aplicação original, sem mudança) | — | — | — | — | (a preencher) | — |
+| 00 | Linha de base (aplicação original, sem mudança) | — | Medido | — | 3,62 req/s · p95 17.932,0 ms · CPU banco 97,1% · CPU api 5,0% | [20261110-095041-00-linha-de-base](resultados/20261110-095041-00-linha-de-base/)<br>[20261110-095428-00-linha-de-base](resultados/20261110-095428-00-linha-de-base/)<br>[20261110-095605-00-linha-de-base](resultados/20261110-095605-00-linha-de-base/) | Saturação quase total do banco de dados (97,1% CPU média). Latência p95 dominada por `pedidos-do-cliente` (~18–20 s) e `top-produtos` (~21–25 s). Contrato mantido (42/42). |
