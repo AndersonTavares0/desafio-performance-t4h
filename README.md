@@ -9,12 +9,12 @@
 
 ## Índice Rápido das Entregas
 
-- 📄 **[Artigo Técnico (`artigo/artigo.md`)](artigo/artigo.md):** Relatório científico completo no template oficial de 9 seções do edital, com 7 fontes primárias/acadêmicas citadas.
-- 🧪 **[Registro de Experimentos (`experimentos.md`)](experimentos.md):** Tabela metodológica com todas as rodadas (00 a 03), medições em triplicata, antes/depois e links para os resultados.
-- 🔬 **[Dossiê de Diagnóstico (`diagnostico/`)](diagnostico/):** Evidências salvas de planos de execução (`EXPLAIN ANALYZE`), análise de pooling e síntese diagnóstica.
-- 📚 **[Pesquisa Bibliográfica (`pesquisa/`)](pesquisa/):** Levantamento de fontes primárias (`fontes.md`) e matriz multicritério de alternativas (`alternativas-e-escolha.md`).
-- 📋 **[Catálogo de Próximos Testes (`proximos-testes.md`)](proximos-testes.md):** Fichas técnicas com o backlog de intervenções futuras priorizadas.
-- 📊 **[Resultados Brutos (`resultados/`)](resultados/):** Pastas com as medições oficiais geradas pelo script de carga k6.
+- **[Artigo Técnico (`artigo/artigo.md`)](artigo/artigo.md):** Relatório científico completo no template oficial de 9 seções do edital, com 7 fontes primárias/acadêmicas citadas.
+- **[Registro de Experimentos (`experimentos.md`)](experimentos.md):** Tabela metodológica com todas as rodadas (00 a 03), medições em triplicata, antes/depois e links para os resultados.
+- **[Dossiê de Diagnóstico (`diagnostico/`)](diagnostico/):** Evidências salvas de planos de execução (`EXPLAIN ANALYZE`), análise de pooling e síntese diagnóstica.
+- **[Pesquisa Bibliográfica (`pesquisa/`)](pesquisa/):** Levantamento de fontes primárias (`fontes.md`) e matriz multicritério de alternativas (`alternativas-e-escolha.md`).
+- **[Catálogo de Próximos Testes (`proximos-testes.md`)](proximos-testes.md):** Fichas técnicas com o backlog de intervenções futuras priorizadas.
+- **[Resultados Brutos (`resultados/`)](resultados/):** Pastas com as medições oficiais geradas pelo script de carga k6.
 
 ---
 
