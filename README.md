@@ -22,7 +22,7 @@
 
 A aplicação é uma API de e-commerce em Node.js 20 (Express) e PostgreSQL 16.4 sob limites rígidos de hardware (0,5 CPU / 256 MiB na API e 1,0 CPU / 512 MiB no banco), operando sobre uma base sintética de 100 mil clientes, 20 mil produtos, 500 mil pedidos e 1,5 milhão de itens.
 
-Seguindo o método científico com medições em triplicata (20 usuários virtuais por 60s, calculando a mediana), a aplicação alcançou um **salto de 8x na vazão** e **redução de 97,9% na latência**, mantendo o contrato funcional rigorosamente preservado (42/42 casos idênticos) a custo zero de infraestrutura.
+Seguindo o método científico com medições em triplicata (20 usuários virtuais por 60s, calculando a mediana), a aplicação alcançou um **salto de 8x na vazão** e **redução de 97,9% na latência**, preservando a conformidade das 42 respostas do contrato a custo zero de infraestrutura.
 
 | Etapa / Intervenção | Vazão (req/s) | Ganho vs. Base | Latência Mediana | Latência p95 | CPU Banco | CPU API | RAM API | Contrato |
 |---|---|---|---|---|---|---|---|---|
@@ -38,7 +38,7 @@ Seguindo o método científico com medições em triplicata (20 usuários virtua
 - **Queda de 97,9% na Latência Mediana Global:** Reduzida de 1.248,0 ms para 26,5 ms.
 - **Aceleração da Rota Crítica `/clientes/:id/pedidos`:** Latência mediana despencou de 15.252,4 ms para 66,9 ms (-99,6%), transformando varreduras sequenciais completas em 500k e 1,5M de linhas em Index Scans logarítmicos.
 - **Alívio do Runtime Node.js:** O pushdown SQL descarregou o Event Loop da API, derrubando o uso de CPU de 20,9% para 3,1% e o uso de memória de 58,3 MiB para 26,4 MiB.
-- **Contrato 100% Mantido:** 42 de 42 casos de teste permaneceram idênticos ao padrão de referência.
+- **Contrato Funcional Preservado:** 42 de 42 casos de teste permaneceram idênticos ao padrão de referência gravado antes das intervenções.
 
 ---
 
@@ -52,6 +52,7 @@ Cada execução do script de carga gera uma pasta imutável em `resultados/` com
   - Com a introdução de índices (Etapa 02), a CPU da API subiu temporariamente para **20,9%**, pois o Node.js passou a processar milhares de objetos em memória trazidos da rota analítica.
   - Com o pushdown SQL (Etapa 03), a CPU da API recuou para **3,1%** e o consumo médio de RAM caiu de 58,3 MiB para **26,4 MiB**, demonstrando desoneração real da camada de aplicação.
 - **Protocolo de Tríade e Mediana:** Cada experimento é executado 3 vezes consecutivas sob as mesmas condições ambientais. Como variações de escalonamento do sistema operacional podem causar oscilações de até 30% entre rodadas individuais, a **mediana das 3 execuções** é o critério estatístico adotado para anular ruídos e evitar viés de medições isoladas.
+- **Sensibilidade ao Hardware e Reprodutibilidade:** Os valores absolutos de vazão (req/s) e latência refletem o ambiente de medição local (host Linux com 16 CPUs). Em máquinas com configurações distintas, os valores absolutos variam, mas as grandezas relativas de ganho (~8x em vazão, alívio de CPU e queda de latência nas junções) e a conformidade do contrato funcional se mantêm quando observados os mesmos limites de recursos no Docker.
 
 ---
 
