@@ -1,0 +1,17 @@
+Medição: 03-pushdown-agregacao
+Carga: 20 usuários virtuais por 60s
+
+Requisições:        1845
+Requisições/s:      29.02
+Tempo de resposta:  mediana 31.0 ms | p95 4428.0 ms | p99 10810.1 ms
+Erros:              0.00%
+
+Por rota:
+rota                  req       mediana       p95           p99           erros   
+cliente               473       5.0 ms        85.7 ms       100.3 ms      0.0%    
+cliente-por-email     272       6.9 ms        93.6 ms       107.9 ms      0.0%    
+pedidos-do-cliente    388       86.8 ms       293.1 ms      371.8 ms      0.0%    
+pedidos-por-status    254       362.6 ms      10751.6 ms    14055.5 ms    0.0%    
+busca-produtos        281       16.2 ms       134.2 ms      199.2 ms      0.0%    
+vendas-por-dia        144       2330.0 ms     5777.9 ms     8944.1 ms     0.0%    
+top-produtos          33        4734.2 ms     11286.9 ms    11363.6 ms    0.0%    
