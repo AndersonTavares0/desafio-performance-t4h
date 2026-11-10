@@ -18,18 +18,18 @@ A aplicação é a API de uma loja fictícia, em Node.js (Express) com PostgreSQ
 **Status:** Concluído, Medido e Auditado (Contrato 42/42 aprovado)  
 **Artigo Principal:** [Artigo Técnico-Científico (`artigo/artigo.md`)](artigo/artigo.md)
 
-### Documentos do Desafio
+### O que está no repositório
 
-- **[Artigo Técnico (`artigo/artigo.md`)](artigo/artigo.md):** Relatório científico completo no template oficial de 9 seções do edital, com 7 fontes primárias/acadêmicas citadas.
-- **[Registro de Experimentos (`experimentos.md`)](experimentos.md):** Tabela metodológica com todas as rodadas (00 a 03), medições em triplicata, antes/depois e links para os resultados.
-- **[Dossiê de Diagnóstico (`diagnostico/`)](diagnostico/):** Evidências salvas de planos de execução (`EXPLAIN ANALYZE`), análise de pooling e síntese diagnóstica.
-- **[Pesquisa Bibliográfica (`pesquisa/`)](pesquisa/):** Levantamento de fontes primárias (`fontes.md`) e matriz multicritério de alternativas (`alternativas-e-escolha.md`).
-- **[Catálogo de Próximos Testes (`proximos-testes.md`)](proximos-testes.md):** Fichas técnicas com o backlog de intervenções futuras priorizadas.
-- **[Resultados Brutos (`resultados/`)](resultados/):** Pastas com as medições oficiais geradas pelo script de carga k6.
+- **[Artigo Técnico (`artigo/artigo.md`)](artigo/artigo.md):** Diagnóstico, alternativas e resultados no template do edital.
+- **[Registro de Experimentos (`experimentos.md`)](experimentos.md):** Registro das medições em triplicata antes e depois de cada mudança.
+- **[Diagnóstico (`diagnostico/`)](diagnostico/):** Planos de execução (`EXPLAIN ANALYZE`) e análise de conexões do banco.
+- **[Pesquisa (`pesquisa/`)](pesquisa/):** Fontes consultadas e comparação de alternativas.
+- **[Próximos testes (`proximos-testes.md`)](proximos-testes.md):** Backlog de melhorias que pesquisamos mas deixamos para depois.
+- **[Resultados brutos (`resultados/`)](resultados/):** Saídas geradas pelo script de carga k6.
 
-### Síntese de Resultados das Otimizações
+### Resultados medidos
 
-Avaliadas sob 20 usuários virtuais por 60s (mediana de 3 execuções), as intervenções alcançaram **8x mais vazão** (+701,7%) e **redução de 97,9% na latência mediana**, com **42/42 contratos preservados** a custo zero de infraestrutura:
+Carga de 20 usuários virtuais por 60s (mediana de 3 rodadas):
 
 | Etapa / Intervenção | Vazão (req/s) | Ganho vs. Base | Latência Mediana | Latência p95 | CPU Banco | CPU API | RAM API | Contrato |
 |---|---|---|---|---|---|---|---|---|
@@ -38,7 +38,7 @@ Avaliadas sob 20 usuários virtuais por 60s (mediana de 3 execuções), as inter
 | **02. Índices B-tree Estratégicos** | 28,23 | +679,8% | 82,1 ms | 4.408,9 ms | 86,9% | 20,9% | 58,3 MiB | 42/42 |
 | **03. Pushdown de Agregação SQL** | 29,02 | +701,7% | 26,5 ms | 4.428,0 ms | 89,1% | 3,1% | 26,4 MiB | 42/42 |
 
-![Evolução de Desempenho por Intervenção](artigo/img/p95-por-mudanca.png)
+![Desempenho antes e depois das mudanças](artigo/img/p95-por-mudanca.png)
 
 ---
 

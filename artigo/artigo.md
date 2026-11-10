@@ -1,4 +1,4 @@
-# Otimização de Performance em Node.js e PostgreSQL: Maximizando Vazão em 8x com Recursos Computacionais Inalterados
+# De 3,6 para 29 req/s: como multiplicamos a vazão da API por 8 sem gastar mais recursos
 
 **Autor:** Anderson Tavares (`anderson.g.tavares@gmail.com`)  
 **Data:** 10 de novembro de 2026  
@@ -6,16 +6,16 @@
 
 ## 1. Resumo
 
-Uma API em Node.js e PostgreSQL sofria com lentidão sob 20 usuários virtuais: 3,62 req/s, p95 de 17,9 s e saturação de 97,1% da CPU do banco. O diagnóstico revelou conexões sem pool, ausência de índices em chaves estrangeiras e transferência de dados brutos para agregação no Node.js. Aplicou-se connection pool (`pg.Pool`), 6 índices B-tree estratégicos e pushdown de agregação SQL. A vazão subiu 8x (29,02 req/s) e a latência mediana caiu de 1.248 ms para 26,5 ms (-97,9%), a custo zero de infraestrutura e com as 42 respostas do contrato preservadas.
+A API da loja fictícia sofria para atender 20 usuários virtuais: entregava apenas 3,62 req/s, com latência mediana de 1,2 s, p95 de 17,9 s e o banco consumindo 97,1% da CPU. Investigando os logs, encontramos três problemas: conexões abertas do zero a cada query, falta de índices em chaves estrangeiras e agregação de dados brutos na memória do Node.js. Colocamos um pool de conexões (`pg.Pool`), criamos 6 índices B-tree e passamos a agregação para o SQL. Sem alterar os limites dos containers (0,5 CPU na API e 1,0 CPU no banco) e mantendo as 42 respostas do contrato idênticas às originais, a vazão subiu 8 vezes (29,02 req/s) e a latência mediana caiu 97,9% (de 1.248 ms para 26,5 ms).
 
 ## 2. Contexto e diagnóstico
 
-A aplicação opera em dois containers Docker limitados a 0,5 CPU e 256 MiB (API Node.js 20) e 1,0 CPU e 512 MiB (PostgreSQL 16), com base sintética de 100 mil clientes, 20 mil produtos, 500 mil pedidos e 1,5 milhão de itens. Na linha de base ([20261110-095041-00-linha-de-base](../resultados/20261110-095041-00-linha-de-base/)), o sistema registrou 3,62 req/s e p95 de 17.932,0 ms, com CPU do banco em 97,1% e API em 5,0%.
+A aplicação roda em dois containers Docker limitados: a API Node.js 20 tem 0,5 CPU e 256 MiB, e o banco PostgreSQL 16 tem 1,0 CPU e 512 MiB, com dados sintéticos de 100 mil clientes, 20 mil produtos, 500 mil pedidos e 1,5 milhão de itens. Na linha de base ([20261110-095041-00-linha-de-base](../resultados/20261110-095041-00-linha-de-base/)), o sistema registrou 3,62 req/s e p95 de 17.932,0 ms, com CPU do banco em 97,1% e API em 5,0%.
 
-Inspeções salvas em [diagnostico/](../diagnostico/) revelaram três problemas:
-1. **Conexões Efêmeras:** `api/src/db.js` criava `new pg.Client()` por consulta. No PostgreSQL (processos via `fork`), o ciclo repetido de autenticação gerou sobrecarga no SO ([02-conexao-e-pooling.txt](../diagnostico/02-conexao-e-pooling.txt)), com até 30 forks por requisição em `/clientes/:id/pedidos`.
-2. **Varreduras Sequenciais:** O `EXPLAIN (ANALYZE, BUFFERS)` revelou ausência de índices secundários ([01-explain-queries-linha-de-base.txt](../diagnostico/01-explain-queries-linha-de-base.txt)). Buscas por `cliente_id` liam 500 mil pedidos e 1,5 milhão de itens via `Seq Scan`, elevando a rota `/clientes/:id/pedidos` a 15.252,4 ms.
-3. **Agregação In-Memory:** `/relatorios/vendas-por-dia` transferia milhares de tuplas para o Node.js agrupar com `Map`, gerando sobrecarga de memória.
+Os diagnósticos em [diagnostico/](../diagnostico/) apontaram três gargalos:
+1. **Conexões efêmeras:** `api/src/db.js` criava `new pg.Client()` por consulta. No PostgreSQL (baseado em `fork`), isso gerou sobrecarga no SO ([02-conexao-e-pooling.txt](../diagnostico/02-conexao-e-pooling.txt)), com até 30 forks por chamada em `/clientes/:id/pedidos`.
+2. **Varreduras sequenciais:** `EXPLAIN (ANALYZE, BUFFERS)` ([01-explain-queries-linha-de-base.txt](../diagnostico/01-explain-queries-linha-de-base.txt)) confirmou a falta de índices. Consultas por `cliente_id` liam 500 mil pedidos e 1,5 milhão de itens via `Seq Scan`, elevando `/clientes/:id/pedidos` a 15,2 s.
+3. **Agregação em memória:** `/relatorios/vendas-por-dia` transferia milhares de tuplas para o Node.js agrupar com `Map`, gastando rede e memória.
 
 Hipóteses de causa:
 - *Hipótese 1:* Conexões efêmeras saturam a CPU do banco pelo custo de `fork()`.
@@ -24,18 +24,18 @@ Hipóteses de causa:
 
 ## 3. Estado da arte
 
-### Pooling de Conexões em Arquiteturas Baseadas em Processos
+### Pooling de conexões em bancos baseados em processos
 O PostgreSQL aloca um processo dedicado por sessão via `fork()`. A documentação oficial (Cap. 20) e a do `node-postgres` explicam que clientes efêmeros acarretam alocação de sockets, autenticação e catálogos locais a cada requisição. O Connection Pooling preserva conexões abertas para atender consultas em fila, reduzindo latência e consumo de descritores de arquivo.
 
-### Indexação B-Tree em Relacionamentos e Expressões
+### Índices B-Tree para chaves estrangeiras e buscas
 Graefe (2011) demonstra que a árvore B tem custo O(log N), contra O(N) da varredura sequencial. Garcia-Molina et al. (2008) destacam que consultas sem índices secundários forçam varreduras completas. A documentação do PostgreSQL 16 (Cap. 11) adverte que chaves `REFERENCES` não são indexadas automaticamente, e que filtros case-insensitive (`lower(email)`) demandam índices funcionais.
 
-### Pushdown de Agregação e Eficiência de I/O
-O princípio de pushdown computation estabelece que agregações devem ocorrer no motor de dados (Garcia-Molina et al., 2008). O PostgreSQL possui funções nativas (`COUNT`, `SUM`, `GROUP BY`) vetorizadas em C (Cap. 9.21). Agregar no banco comprime dezenas de milhares de registros em poucas tuplas, reduzindo tráfego de rede e liberando o Event Loop da API (Node.js LTS Docs).
+### Agregação no próprio banco (Pushdown)
+O princípio de pushdown estabelece que filtros e somatórios devem rodar no motor de banco (Garcia-Molina et al., 2008). O PostgreSQL possui rotinas de agregação (`COUNT`, `SUM`, `GROUP BY`) vetorizadas em C (Cap. 9.21). Agregar no SQL comprime milhares de linhas em poucas tuplas, economizando rede e liberando o Event Loop da API (Node.js LTS Docs).
 
 ## 4. Alternativas consideradas
 
-Para selecionar intervenções de maior impacto e menor risco, avaliou-se a matriz registrada em [pesquisa/alternativas-e-escolha.md](../pesquisa/alternativas-e-escolha.md):
+Para priorizar o que testar primeiro, comparamos as alternativas pelo impacto esperado, risco e esforço na matriz de [pesquisa/alternativas-e-escolha.md](../pesquisa/alternativas-e-escolha.md):
 
 | Alternativa | Custo | Desempenho | Risco | Esforço |
 |---|---|---|---|---|
@@ -45,41 +45,41 @@ Para selecionar intervenções de maior impacto e menor risco, avaliou-se a matr
 | D. Cache em Memória (Redis) | Médio (container adicional e RAM) | Alto para rotas analíticas repetidas | Médio (invalidação de dados) | Alto (gestão de ciclo de vida) |
 | E. Índice Trigrama GIN (`pg_trgm`) | Médio (extensão C e índice pesado) | Alto em buscas textuais com `ILIKE` | Baixo | Médio (extensão do PostgreSQL) |
 
-As alternativas A, B e C foram selecionadas por atacarem as causas-raiz a custo zero. A alternativa D (Redis) foi descartada por adicionar complexidade operacional prematura. A alternativa E (`pg_trgm`) foi postergada para o backlog, pois as chaves estrangeiras cobriam 70% da carga. Ambas constam em [proximos-testes.md](../proximos-testes.md).
+Escolhemos A, B e C por atacarem os gargalos a custo zero. Descartamos o Redis (D) de início para evitar complexidade prematura. O índice trigrama (E) ficou para depois em [proximos-testes.md](../proximos-testes.md), pois o foco principal era o tráfego de chaves estrangeiras.
 
 ## 5. Solução escolhida e por quê
 
-A intervenção foi conduzida em três etapas atômicas:
-1. **Connection Pooling no Driver:** Adoção de `new Pool({ max: 20 })` em `api/src/db.js`, refletindo a concorrência de 20 VUs e mitigando o custo de `fork()` sem saturar a memória do banco.
-2. **Índices B-Tree Estratégicos:** Criação de `banco/03-indices.sql` com 6 índices cobrindo chaves estrangeiras (`pedidos.cliente_id`, `itens_pedido.pedido_id`), busca funcional (`lower(email)`), paginação (`status, criado_em DESC`) e intervalo temporal. Transforma o custo de junções de varreduras lineares para buscas logarítmicas.
-3. **Pushdown SQL em Vendas por Dia:** Reescrever `/relatorios/vendas-por-dia` em `api/src/rotas.js` delegando `GROUP BY`, `SUM` e `COUNT` ao PostgreSQL, mapeando com `Number(...)` para garantir o contrato. Descartou-se agregar no JavaScript para reduzir o consumo de CPU e RAM no Node.js.
+Aplicamos as melhorias em três passos separados, medindo cada um:
+1. **Connection Pooling no Driver:** Uso de `new Pool({ max: 20 })` em `api/src/db.js`, casando com 20 VUs e eliminando `fork()` repetido sem estourar a memória do banco.
+2. **Índices B-Tree Estratégicos:** Script `banco/03-indices.sql` com 6 índices em chaves estrangeiras (`pedidos.cliente_id`, `itens_pedido.pedido_id`), busca (`lower(email)`), paginação e datas. Reduz o custo de junções de varredura linear para busca em árvore B.
+3. **Pushdown SQL em Vendas por Dia:** Reescrita de `/relatorios/vendas-por-dia` em `api/src/rotas.js` delegando `GROUP BY`, `SUM` e `COUNT` ao SQL, com `Number(...)` para manter os tipos. Descartou-se agregar no Node.js para poupar CPU e RAM.
 
 ## 6. Experimento e resultado
 
-Cada mudança seguiu o protocolo oficial (3 baterias de 60s com 20 VUs, calculando a mediana):
+Cada mudança seguiu o protocolo do edital (3 baterias de 60s com 20 VUs, calculando a mediana):
 
 | Mudança | Hipótese | p95 antes → depois | req/s antes → depois | CPU/memória | Pastas de resultados | Conclusão |
 |---|---|---|---|---|---|---|
-| **01-connection-pool** | Reutilizar conexões elimina sobrecarga de forks | 17.932 ms → 13.321 ms (-25,7%) | 3,62 → 4,81 (+32,9%) | Banco: 97,1% → 96,3%<br>API: 5,0% → 4,9% (RAM: 40,8 MiB) | [01-connection-pool](../resultados/20261110-100637-01-connection-pool/) | Vazão aumentou 32,9% e `/clientes/:id` caiu para 88,1 ms. Banco continuou saturado por falta de índices. |
-| **02-indices-banco** | Índices em chaves estrangeiras eliminam Seq Scans | 13.321 ms → 4.409 ms (-66,9%) | 4,81 → 28,23 (+486,9%) | Banco: 96,3% → 86,9%<br>API: 4,9% → 20,9% (RAM: 58,3 MiB) | [02-indices-banco](../resultados/20261110-101549-02-indices-banco/) | Salto de 6x na vazão. A rota `/clientes/:id/pedidos` caiu de 15.252 ms para 115 ms (>100x mais rápida). Contrato 42/42. |
-| **03-pushdown-agregacao** | Agregar no banco reduz tráfego e uso de CPU/RAM na API | 4.409 ms → 4.428 ms (estável) | 28,23 → 29,02 (+2,8%) | Banco: 86,9% → 89,1%<br>API: 20,9% → 3,1% (RAM: 26,4 MiB) | [03-pushdown-agregacao](../resultados/20261110-102601-03-pushdown-agregacao/) | Latência mediana caiu para 26,5 ms. A CPU da API recuou 85,2% e a RAM caiu pela metade. Contrato 42/42. |
+| **01-connection-pool** | Reutilizar conexões elimina sobrecarga de forks | 17.932 ms → 13.321 ms (-25,7%) | 3,62 → 4,81 (+32,9%) | Banco: 97,1% → 96,3%<br>API: 5,0% → 4,9% (RAM: 40,8 MiB) | [01-connection-pool](../resultados/20261110-100637-01-connection-pool/) | Vazão subiu 32,9% e `/clientes/:id` caiu para 88 ms. Banco continuou no teto por falta de índices. |
+| **02-indices-banco** | Índices em chaves estrangeiras eliminam Seq Scans | 13.321 ms → 4.409 ms (-66,9%) | 4,81 → 28,23 (+486,9%) | Banco: 96,3% → 86,9%<br>API: 4,9% → 20,9% (RAM: 58,3 MiB) | [02-indices-banco](../resultados/20261110-101549-02-indices-banco/) | Salto de 6x na vazão. A rota `/clientes/:id/pedidos` caiu para 115 ms. Contrato mantido. |
+| **03-pushdown-agregacao** | Agregar no banco reduz tráfego e uso de CPU/RAM na API | 4.409 ms → 4.428 ms (estável) | 28,23 → 29,02 (+2,8%) | Banco: 86,9% → 89,1%<br>API: 20,9% → 3,1% (RAM: 26,4 MiB) | [03-pushdown-agregacao](../resultados/20261110-102601-03-pushdown-agregacao/) | Latência mediana caiu para 26,5 ms. CPU da API recuou 85% e RAM caiu pela metade. Contrato mantido. |
 
-O resultado final alcançou **29,02 req/s** (**+701,7%** vs. base de 3,62 req/s) e latência mediana de **26,5 ms** (contra 1.248,0 ms na base), preservando todas as 42 respostas da aplicação original.
+No resultado final, a vazão subiu para **29,02 req/s** (**+701,7%** vs. base de 3,62 req/s) e a latência mediana caiu para **26,5 ms** (contra 1.248,0 ms na base), com todas as 42 respostas do contrato preservadas.
 
-**O que não funcionou e limitações dos ganhos:**  
-O pool isolado não aliviou a CPU do banco (97,1% para 96,3%), pois não resolve varreduras sequenciais. Já o pushdown SQL não reduziu o p95 global (manteve-se em ~4,4 s), pois a cauda de latência continuou governada pelas consultas com paginação profunda via OFFSET em `/pedidos` (páginas até 1.000 com p95 de ~10 s) e pelo somatório de 1,5 milhão de itens em `/relatorios/top-produtos` (~4,7 s). Isso evidencia que o pushdown em `vendas-por-dia` desonera o runtime da API, mas não resolve gargalos de paginação por offset nem de agregação global sem amortização de cache.
+**O que não funcionou e por quê:**  
+O pool isolado não destravou o banco (CPU de 97% para 96%), pois o gargalo eram as buscas sem índice. Já o pushdown SQL não reduziu o p95 global (~4,4 s), pois a cauda de latência é puxada por duas consultas pesadas: a paginação profunda via OFFSET em `/pedidos` (páginas até 1.000 com p95 de ~10 s) e o somatório de 1,5 milhão de itens em `top-produtos` (~4,7 s). O pushdown poupou CPU e RAM na API, mas não eliminou a cauda dessas duas rotas.
 
 ![p95 antes e depois de cada mudança](img/p95-por-mudanca.png)
 
 ## 7. Limites e testes futuros
 
-A solução apresenta os seguintes limites e considerações metodológicas:
+A solução tem limites práticos que precisam ser considerados:
 1. **Sobrecarga em Escrita:** Os 6 índices ocupam ~62 MiB e geram manutenção de páginas em `INSERT`/`UPDATE`, exigindo reavaliação sob cargas com predominância de escrita.
 2. **Busca Textual sem Índice:** A rota `/produtos/busca` ainda utiliza `ILIKE '%termo%'`, exigindo varredura sequencial em 20 mil produtos.
-3. **Amostragem e Hardware:** Seguiu-se o protocolo de 3 baterias (n=3) do desafio. As métricas absolutas de vazão e latência refletem o host de teste (16 CPUs, Linux); em outras máquinas os valores absolutos variam, mas as grandezas relativas de ganho tendem a se manter. Em produção, recomenda-se n >= 5, avaliando Coeficiente de Variação (CV < 5%) e Intervalo de Confiança a 95% (IC 95%).
+3. **Amostragem e Hardware:** Seguimos o protocolo de 3 baterias (n=3) do edital. As métricas absolutas refletem a máquina de teste (16 CPUs, Linux); em outro hardware os valores mudam, mas as proporções de ganho tendem a se manter. Em produção, recomendam-se mais baterias (n >= 5) com avaliação de CV e intervalo de confiança.
 
 **O que refutaria a conclusão:**  
-Nossa conclusão seria refutada se uma carga mista gerasse contenção severa de locks nas árvores B, ou se o catálogo crescesse tornando o `ILIKE` o gargalo dominante.
+Nossa tese seria refutada se uma carga mista de escrita gerasse contenção de travas nas árvores B que superasse o ganho nas leituras, ou se o catálogo de produtos crescesse a ponto de tornar o `ILIKE` o gargalo único do sistema.
 
 Testes futuros priorizados em [proximos-testes.md](../proximos-testes.md):
 - Índice GIN trigrama (`pg_trgm`) para acelerar buscas textuais.
