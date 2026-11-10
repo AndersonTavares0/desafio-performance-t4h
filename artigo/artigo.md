@@ -44,7 +44,7 @@ Para selecionar as intervenções de maior impacto sistêmico e menor risco ao c
 | D. Cache em Memória (Redis) | Médio (container adicional e RAM extra) | Alto para rotas analíticas repetidas | Médio (invalidação de dados) | Alto (gestão de ciclo de vida) |
 | E. Índice Trigrama GIN (`pg_trgm`) | Médio (extensão C e índice pesado) | Alto em buscas textuais com `ILIKE` | Baixo | Médio (extensão do PostgreSQL) |
 
-As alternativas A, B e C foram selecionadas por atacarem as causas-raiz identificadas sem adicionar novos componentes de infraestrutura ou elevar custos de hospedagem. As alternativas D e E foram mapeadas no catálogo de [proximos-testes.md](../proximos-testes.md).
+As alternativas A, B e C foram selecionadas por atacarem as causas-raiz a custo zero e com preservação do contrato. A alternativa D (Redis) foi descartada por exigir novo container, memória extra e complexidade de invalidação antes de esgotar as otimizações nativas. A alternativa E (`pg_trgm`) foi postergada por focar em rota de 15% do tráfego, enquanto as chaves estrangeiras cobriam 70% da carga. Ambas constam em [proximos-testes.md](../proximos-testes.md).
 
 ## 5. Solução escolhida e por quê
 
@@ -69,10 +69,13 @@ O resultado consolidado final alcançou **29,02 req/s** (**+701,7%** vs. base de
 
 ## 7. Limites e testes futuros
 
-A solução implementada apresenta os seguintes limites e premissas operacionais:
-1. **Sobrecarga de Escrita:** A adição de 6 índices B-tree consome cerca de 62 MiB adicionais e introduz um custo computacional na manutenção das páginas em operações frequentes de `INSERT`, `UPDATE` e `DELETE`. Sob tráfego com predominância de escritas massivas, esse trade-off exigiria reavaliação.
-2. **Carga em Loop Fechado:** O k6 simula usuários sem intervalo de reflexão (`think time`), gerando uma pressão de requisições contínua que difere do comportamento humano real de navegação.
+A solução apresenta os seguintes limites e premissas operacionais:
+1. **Sobrecarga de Escrita:** Os 6 índices B-tree ocupam ~62 MiB e introduzem custo de manutenção de páginas em operações de escrita (`INSERT`/`UPDATE`). Sob tráfego predominantemente de escrita, esse trade-off exigiria reavaliação.
+2. **Carga em Loop Fechado:** O k6 simula 20 usuários contínuos sem intervalo de reflexão (`think time`), gerando pressão que diverge da navegação humana real.
 3. **Busca Textual sem Índice:** A rota `/produtos/busca` ainda utiliza `ILIKE '%termo%'`, exigindo varredura sequencial em 20 mil produtos.
+
+**O que refutaria a conclusão:**  
+Nossa conclusão seria refutada se: (a) uma carga com mais de 40% de escritas concorrentes causasse contenção de locks e queda de vazão por manutenção de índices; ou (b) o catálogo crescesse para centenas de milhares de produtos, tornando o `ILIKE` o novo gargalo crítico.
 
 Testes futuros priorizados em [proximos-testes.md](../proximos-testes.md):
 - Implementação de índice GIN trigrama (`pg_trgm`) para acelerar buscas textuais.
