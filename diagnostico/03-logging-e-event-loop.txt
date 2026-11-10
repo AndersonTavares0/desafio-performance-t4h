@@ -1,0 +1,36 @@
+# Diagnóstico de Logging Síncrono e Event Loop do Node.js
+# Data: 2026-11-10
+# Arquivo sob análise: api/src/server.js
+
+================================================================================
+1. CÓDIGO ATUAL
+================================================================================
+app.use((req, res, next) => {
+  const inicio = Date.now();
+  const enviarJson = res.json.bind(res);
+  res.json = (corpo) => {
+    console.log(JSON.stringify({
+      metodo: req.method,
+      url: req.originalUrl,
+      status: res.statusCode,
+      duracao_ms: Date.now() - inicio,
+      resposta: corpo,
+    }));
+    return enviarJson(corpo);
+  };
+  next();
+});
+
+================================================================================
+2. ANÁLISE DE IMPACTO ARQUITETURAL
+================================================================================
+- `JSON.stringify(corpo)`:
+  Serializa o corpo inteiro de TODAS as respostas para string.
+  Em rotas com respostas extensas (como `/pedidos?status=...`, `/clientes/:id/pedidos`, `/relatorios/vendas-por-dia`), o objeto JSON possui dezenas ou centenas de elementos, exigindo serialização síncrona custosa na thread principal única do Event Loop do Node.js.
+
+- `console.log()` no Node.js / Docker:
+  Em sistemas POSIX quando a saída padrão (`stdout`) é redirecionada para um pipe ou arquivo (como ocorre nos drivers de logging padrão do Docker `json-file`), `console.log()` é síncrono e bloqueante.
+
+- Impacto sob Carga:
+  A CPU da API permanece baixa (~5%) na linha de base porque o banco de dados está tão saturado que o fluxo de requisições por segundo é muito baixo (3,62 req/s).
+  No entanto, se o banco for otimizado e a vazão saltar para centenas de req/s, esse logging síncrono se tornará um gargalo direto no Event Loop do Node.js e no I/O do daemon do Docker.

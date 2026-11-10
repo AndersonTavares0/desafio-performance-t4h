@@ -1,0 +1,47 @@
+# Diagnóstico de Conexões e Gerenciamento de Ciclo de Vida do Driver PG
+# Data: 2026-11-10
+# Arquivo sob análise: api/src/db.js
+
+================================================================================
+1. CÓDIGO ATUAL
+================================================================================
+const { Client } = require('pg');
+
+async function consultar(sql, parametros = []) {
+  const cliente = new Client(config);
+  await cliente.connect();
+  try {
+    const resultado = await cliente.query(sql, parametros);
+    return resultado.rows;
+  } finally {
+    await cliente.end();
+  }
+}
+
+================================================================================
+2. ANÁLISE DE IMPACTO ARQUITETURAL
+================================================================================
+- Custo por chamada:
+  1. Criação de socket TCP local e conexão ao PostgreSQL na porta 5432.
+  2. Fork de processo backend dedicado no PostgreSQL (o modelo do PostgreSQL é processo por conexão, não threads).
+  3. Alocação de memória de sessão (`work_mem`, catálogos do sistema, buffers locais).
+  4. Autenticação e handshake de inicialização de sessão.
+  5. Execução de uma única query SQL.
+  6. Encerramento do socket e encerramento do processo backend do PostgreSQL.
+
+- Multiplicação por Rota:
+  * GET /clientes/:id (25% da carga): 1 conexão por req.
+  * GET /clientes?email= (15% da carga): 1 conexão por req.
+  * GET /pedidos?status= (15% da carga): 2 conexões por req (count + select).
+  * GET /produtos/busca (15% da carga): 1 conexão por req.
+  * GET /relatorios/vendas-por-dia (8% da carga): 1 conexão por req.
+  * GET /relatorios/top-produtos (2% da carga): 1 conexão por req.
+  * GET /clientes/:id/pedidos (20% da carga):
+      - 1 consulta para cliente
+      - 1 consulta para pedidos
+      - N consultas para itens (onde N = quantidade de pedidos do cliente)
+      - N * M consultas para produtos (onde M = quantidade de itens por pedido)
+      Média observada: de 15 a 30 conexões criadas e destruídas por requisição individual!
+
+- Impacto sob Carga (20 VUs simultâneos):
+  Apenas a rota /clientes/:id/pedidos gera picos de centenas de forks de processos por segundo no PostgreSQL, consumindo ciclos massivos de CPU do kernel e do banco apenas para gerenciar o ciclo de vida dos processos, concorrendo diretamente com a execução das queries sequenciais.
