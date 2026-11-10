@@ -24,7 +24,7 @@ A aplicação é uma API de e-commerce em Node.js 20 (Express) e PostgreSQL 16.4
 
 Seguindo o método científico com medições em triplicata (20 usuários virtuais por 60s, calculando a mediana), a aplicação alcançou um **salto de 8x na vazão** e **redução de 97,9% na latência**, mantendo o contrato funcional rigorosamente preservado (42/42 casos idênticos) a custo zero de infraestrutura.
 
-| Etapa / Intervenção | Vazão (req/s) | $\Delta$ vs. Base | Latência Mediana | Latência p95 | CPU Banco | CPU API | RAM API | Contrato |
+| Etapa / Intervenção | Vazão (req/s) | Ganho vs. Base | Latência Mediana | Latência p95 | CPU Banco | CPU API | RAM API | Contrato |
 |---|---|---|---|---|---|---|---|---|
 | **00. Linha de Base** | 3,62 | — | 1.248,0 ms | 17.932,0 ms | 97,1% | 5,0% | 33,7 MiB | 42/42 |
 | **01. Connection Pool (`pg.Pool`)** | 4,81 | +32,9% | 802,0 ms | 13.320,5 ms | 96,3% | 4,9% | 40,8 MiB | 42/42 |

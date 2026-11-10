@@ -27,7 +27,7 @@ Hipótese 3: Transferir dados analíticos brutos sobrecarrega a rede e a memóri
 O PostgreSQL aloca um processo dedicado por sessão via `fork()`. A documentação oficial (Cap. 20) e a do `node-postgres` explicam que clientes efêmeros acarretam alocação de sockets, autenticação e catálogos locais a cada requisição. O Connection Pooling preserva conexões abertas para atender consultas em fila, reduzindo latência e consumo de descritores de arquivo.
 
 ### Indexação B-Tree em Relacionamentos e Expressões
-Graefe (2011) demonstra que o acesso por árvore B tem custo $O(\log N)$, contra $O(N)$ da varredura sequencial. Garcia-Molina et al. (2008) destacam que consultas sem índices secundários forçam varreduras completas ou tabelas hash volumosas. A documentação do PostgreSQL 16 (Cap. 11) adverte que restrições `REFERENCES` não são indexadas automaticamente. Ademais, para filtros case-insensitive (`lower(email)`), índices funcionais viabilizam busca indexada direta.
+Graefe (2011) demonstra que o acesso por árvore B tem custo O(log N), contra O(N) da varredura sequencial. Garcia-Molina et al. (2008) destacam que consultas sem índices secundários forçam varreduras completas ou tabelas hash volumosas. A documentação do PostgreSQL 16 (Cap. 11) adverte que restrições `REFERENCES` não são indexadas automaticamente. Ademais, para filtros case-insensitive (`lower(email)`), índices funcionais viabilizam busca indexada direta.
 
 ### Pushdown de Agregação e Eficiência de I/O
 O princípio de pushdown computation estabelece que agregações devem ocorrer no motor de armazenamento (Garcia-Molina et al., 2008). O PostgreSQL possui funções nativas (`COUNT`, `SUM`, `GROUP BY`) vetorizadas em C (Cap. 9.21). Agregar no banco comprime dezenas de milhares de registros em poucas linhas, reduzindo tráfego de rede e liberando o Event Loop do Node.js (Node.js LTS Docs).
@@ -72,7 +72,7 @@ O resultado consolidado final alcançou **29,02 req/s** (**+701,7%** vs. base de
 A solução apresenta os seguintes limites operacionais e considerações metodológicas:
 1. **Sobrecarga em Escritas:** Os 6 índices B-tree ocupam ~62 MiB e introduzem manutenção de páginas em `INSERT`/`UPDATE`. Sob tráfego com predominância de escritas, esse trade-off deve ser reavaliado.
 2. **Busca Textual sem Índice:** A rota `/produtos/busca` ainda utiliza `ILIKE '%termo%'`, exigindo varredura sequencial em 20 mil produtos.
-3. **Amostragem Estatística:** Adotou-se rigorosamente a amostra de 3 baterias ($n=3$) conforme estipulado pelo protocolo do desafio. Em ambientes de produção com ruído de rede, recomenda-se estender a amostragem para $n \ge 5$, calculando o Coeficiente de Variação ($CV < 5\%$) e Intervalo de Confiança ($CI_{95\%}$) para descartar variações do escalonador.
+3. **Amostragem Estatística:** Adotou-se rigorosamente a amostra de 3 baterias (n=3) conforme estipulado pelo protocolo do desafio. Em ambientes de produção com ruído de rede, recomenda-se estender a amostragem para n >= 5, calculando o Coeficiente de Variação (CV < 5%) e Intervalo de Confiança a 95% (IC 95%) para descartar variações do escalonador.
 
 **O que refutaria a conclusão:**  
 Nossa conclusão seria refutada se uma carga mista com alta concorrência de escritas gerasse contenção severa de locks nas árvores B, ou se o catálogo de produtos crescesse em ordens de grandeza tornando o `ILIKE` o gargalo dominante.
