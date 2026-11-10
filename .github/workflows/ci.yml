@@ -26,7 +26,7 @@ jobs:
         run: |
           echo "Verificando sintaxe dos fontes Node.js..."
           node --check api/src/server.js
-          node --check api/src/banco.js
+          node --check api/src/db.js
           node --check api/src/rotas.js
           node --check contrato/verificar.js
           echo "Sintaxe OK em todos os arquivos."
