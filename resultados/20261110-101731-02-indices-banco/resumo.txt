@@ -1,0 +1,17 @@
+Medição: 02-indices-banco
+Carga: 20 usuários virtuais por 60s
+
+Requisições:        1776
+Requisições/s:      28.23
+Tempo de resposta:  mediana 90.8 ms | p95 4180.1 ms | p99 8181.9 ms
+Erros:              0.00%
+
+Por rota:
+rota                  req       mediana       p95           p99           erros   
+cliente               462       6.6 ms        108.2 ms      242.6 ms      0.0%    
+cliente-por-email     263       11.4 ms       118.8 ms      238.0 ms      0.0%    
+pedidos-do-cliente    369       115.3 ms      596.0 ms      756.5 ms      0.0%    
+pedidos-por-status    248       1067.2 ms     8354.6 ms     15886.9 ms    0.0%    
+busca-produtos        264       82.0 ms       214.2 ms      398.9 ms      0.0%    
+vendas-por-dia        139       2308.6 ms     5821.7 ms     7104.9 ms     0.0%    
+top-produtos          31        4531.5 ms     7158.4 ms     8257.1 ms     0.0%    
