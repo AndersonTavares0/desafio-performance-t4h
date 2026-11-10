@@ -14,16 +14,43 @@ A aplicação é a API de uma loja fictícia, em Node.js (Express) com PostgreSQ
 ```
 Vaga - Estágio Pesquisa e Inovação 2026/
 ├── AGENTS.md                  # instruções para agentes de IA (o CLAUDE.md aponta para ele)
+├── CLAUDE.md                  # diretrizes de execução e governança técnica
 ├── docker-compose.yml         # API, banco e as ferramentas de medição
 ├── api/                       # código da API (Express + pg) e Dockerfile
-├── banco/                     # scripts que criam as tabelas e geram os dados
+├── banco/                     # esquemas, gerador de dados e índices adicionais
 ├── carga/teste-carga.js       # teste de carga (k6)
 ├── contrato/verificar.js      # confere se as respostas da API continuam iguais
 ├── scripts/
 │   ├── medir.sh               # roda a carga e salva o resultado
 │   └── verificar-contrato.sh  # grava e compara as respostas da API
-└── resultados/                # cada medição cria uma pasta aqui
+├── diagnostico/               # planos de execução EXPLAIN, logs de pooling e síntese
+├── pesquisa/                  # levantamento bibliográfico e matriz de decisão
+├── experimentos.md            # registro formal de todas as rodadas e medições
+├── proximos-testes.md         # catálogo de intervenções futuras priorizadas
+├── artigo/
+│   └── artigo.md              # artigo técnico-científico com metodologia e resultados
+└── resultados/                # pastas com os dados brutos de cada medição
 ```
+
+## Síntese de Resultados e Otimizações
+
+A aplicação foi submetida a um ciclo rigoroso de diagnóstico, fundamentação teórica, implementação e medição empírica (3 execuções com mediana por mudança, 20 VUs por 60s, contrato de 42 casos rigorosamente mantido).
+
+| Etapa / Intervenção | Vazão (req/s) | $\Delta$ vs. Base | Latência Mediana | Latência p95 | CPU Banco | CPU API | RAM API | Contrato |
+|---|---|---|---|---|---|---|---|---|
+| **00. Linha de Base** | 3,62 | — | 1.248,0 ms | 17.932,0 ms | 97,1% | 5,0% | 23,2 MiB | 42/42 |
+| **01. Connection Pool (`pg.Pool`)** | 4,81 | +32,9% | 802,0 ms | 13.320,5 ms | 96,3% | 4,9% | 24,1 MiB | 42/42 |
+| **02. Índices B-tree Estratégicos** | 28,23 | +679,8% | 82,1 ms | 4.408,9 ms | 86,9% | 20,9% | 58,1 MiB | 42/42 |
+| **03. Pushdown de Agregação SQL** | 29,02 | +701,7% | 26,5 ms | 4.428,0 ms | 89,1% | 3,1% | 26,4 MiB | 42/42 |
+
+### Principais Ganhos Técnicos
+- **Vazão Multiplicada por 8x:** O throughput saltou de 3,62 req/s para 29,02 req/s a custo financeiro zero de infraestrutura (mantidos os limites de 0,5 CPU / 256 MiB na API e 1,0 CPU / 512 MiB no banco).
+- **Queda de 97,9% na Latência Mediana Global:** Reduzida de 1.248 ms para 26,5 ms.
+- **Aceleração da Rota Crítica `/clientes/:id/pedidos`:** Latência mediana despencou de 11.744 ms para 66,9 ms (redução de 99,4%), transformando varreduras sequenciais em 500k e 1,5M de linhas em Index Scans logarítmicos.
+- **Alívio de CPU e Memória na API:** O pushdown SQL descarregou o Event Loop da API, derrubando o uso de CPU de 20,9% para 3,1% e o uso de memória de 58,1 MiB para 26,4 MiB.
+- **Contrato Estritamente Mantido:** 42 de 42 casos de teste permaneceram idênticos ao padrão de referência.
+
+Para mais detalhes sobre metodologia, fundamentos e referências bibliográficas, consulte o [artigo técnico](artigo/artigo.md) e o histórico de [experimentos](experimentos.md).
 
 ## Requisitos
 
