@@ -98,4 +98,4 @@ Testes futuros priorizados em [proximos-testes.md](../proximos-testes.md):
 
 ## 9. Uso de IA
 
-Usei IA como apoio para explorar alternativas de consultas SQL, consultar documentações técnicas, organizar o trabalho e auxiliar na criação de scripts. Revisei as sugestões e validei as mudanças sob três barreiras: 42 testes de contrato garantindo conformidade total da API, EXPLAIN ANALYZE no PostgreSQL para auditar os planos de consulta e baterias de teste de carga com o k6 para comparar o desempenho antes e depois de cada intervenção.
+Usei IA para consultar documentações, organizar tarefas, auxiliar em scripts e atuar como revisora crítica — questionando hipóteses técnicas, apontando limitações metodológicas e sugerindo verificações adicionais (a configuração do CI foi manual). Nenhuma resposta foi tratada como evidência ou aceita sem validação: confrontei cada apontamento com o código e validei as decisões via 42 testes de contrato, análise de planos no EXPLAIN ANALYZE e medições empíricas com o k6.
