@@ -34,71 +34,87 @@ rps_err_high = [mx - med for med, mx in zip(rps_medians, rps_maxs)]
 
 # Estilo de publicacao cientifica
 plt.style.use('seaborn-v0_8-whitegrid' if 'seaborn-v0_8-whitegrid' in plt.style.available else 'default')
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4.8), dpi=300)
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5.2), dpi=300)
+
+width = 0.44
 
 # Painel A: Latencia de Cauda p95
 bars1 = ax1.bar(
     x, p95_medians,
     yerr=[p95_err_low, p95_err_high],
-    capsize=5,
-    color='#d9534f',
-    edgecolor='#b52b27',
-    width=0.55,
-    alpha=0.9,
-    ecolor='#333333'
+    capsize=6,
+    color='#e74c3c',
+    edgecolor='#c0392b',
+    linewidth=1.2,
+    width=width,
+    alpha=0.88,
+    error_kw=dict(ecolor='#2c3e50', lw=1.3, capthick=1.3)
 )
-ax1.set_title('(a) Latência de Cauda p95 (Menor é Melhor)', fontsize=12, fontweight='bold', pad=12)
+ax1.set_title('(a) Latência de Cauda p95 (Menor é Melhor)', fontsize=12, fontweight='bold', pad=14)
 ax1.set_ylabel('Latência p95 (ms)', fontsize=10, fontweight='bold')
 ax1.set_xticks(x)
 ax1.set_xticklabels(labels, fontsize=10)
-ax1.set_ylim(0, 21000)
-ax1.grid(axis='y', linestyle='--', alpha=0.6)
+ax1.set_ylim(0, 24000)
+ax1.grid(axis='y', linestyle='--', alpha=0.5)
 
-for bar, med in zip(bars1, p95_medians):
-    yval = bar.get_height()
-    ax1.text(bar.get_x() + bar.get_width() / 2.0, yval + 700, f'{med:,.0f} ms'.replace(',', '.'),
-             ha='center', va='bottom', fontsize=9, fontweight='bold')
+# Rotulos de valores posicionados sempre ACIMA da barra de erro superior para evitar colisao
+for bar, med, mx in zip(bars1, p95_medians, p95_maxs):
+    y_pos = mx + 650
+    ax1.text(bar.get_x() + bar.get_width() / 2.0, y_pos,
+             f'{med:,.0f} ms'.replace(',', '.'),
+             ha='center', va='bottom', fontsize=9.5, fontweight='bold', color='#2c3e50')
 
-ax1.annotate('-75,3% no p95', xy=(3, 4428.0), xytext=(2.2, 10000),
-             arrowprops=dict(arrowstyle='->', lw=1.5, color='#b52b27'),
-             fontsize=9, fontweight='bold', color='#b52b27',
-             bbox=dict(boxstyle='round,pad=0.3', facecolor='#fdf2e9', edgecolor='#d9534f', lw=1))
+# Anotacao de reducao com posicionamento isolado
+ax1.annotate('Queda de -75,3%\n(17.932 -> 4.428 ms)',
+             xy=(3, p95_maxs[3] + 1800),
+             xytext=(2.2, 14500),
+             arrowprops=dict(arrowstyle='->', lw=1.8, color='#c0392b', connectionstyle='arc3,rad=-0.15'),
+             fontsize=9, fontweight='bold', color='#922b21',
+             ha='center',
+             bbox=dict(boxstyle='round,pad=0.4', facecolor='#fdf2e9', edgecolor='#e74c3c', lw=1.2))
 
 # Painel B: Vazao Throughput
 bars2 = ax2.bar(
     x, rps_medians,
     yerr=[rps_err_low, rps_err_high],
-    capsize=5,
-    color='#3498db',
-    edgecolor='#1f618d',
-    width=0.55,
-    alpha=0.9,
-    ecolor='#333333'
+    capsize=6,
+    color='#2980b9',
+    edgecolor='#1a5276',
+    linewidth=1.2,
+    width=width,
+    alpha=0.88,
+    error_kw=dict(ecolor='#2c3e50', lw=1.3, capthick=1.3)
 )
-ax2.set_title('(b) Vazão Throughput (Maior é Melhor)', fontsize=12, fontweight='bold', pad=12)
-ax2.set_ylabel('Requisições por Segundo (req/s)', fontsize=10, fontweight='bold')
+ax2.set_title('(b) Vazão Throughput (Maior é Melhor)', fontsize=12, fontweight='bold', pad=14)
+ax2.set_ylabel('Taxa de Requisições (req/s)', fontsize=10, fontweight='bold')
 ax2.set_xticks(x)
 ax2.set_xticklabels(labels, fontsize=10)
-ax2.set_ylim(0, 36)
-ax2.grid(axis='y', linestyle='--', alpha=0.6)
+ax2.set_ylim(0, 42)
+ax2.grid(axis='y', linestyle='--', alpha=0.5)
 
-for bar, med in zip(bars2, rps_medians):
-    yval = bar.get_height()
-    ax2.text(bar.get_x() + bar.get_width() / 2.0, yval + 1.0, f'{med:.2f}'.replace('.', ','),
-             ha='center', va='bottom', fontsize=9, fontweight='bold')
+# Rotulos de valores posicionados sempre ACIMA da barra de erro superior para evitar colisao
+for bar, med, mx in zip(bars2, rps_medians, rps_maxs):
+    y_pos = mx + 1.2
+    ax2.text(bar.get_x() + bar.get_width() / 2.0, y_pos,
+             f'{med:.2f} req/s'.replace('.', ','),
+             ha='center', va='bottom', fontsize=9.5, fontweight='bold', color='#2c3e50')
 
-ax2.annotate('8x vazão (+701,7%)', xy=(3, 29.02), xytext=(1.0, 31.5),
-             arrowprops=dict(arrowstyle='->', lw=1.5, color='#1f618d'),
-             fontsize=9, fontweight='bold', color='#1f618d',
-             bbox=dict(boxstyle='round,pad=0.3', facecolor='#ebf5fb', edgecolor='#3498db', lw=1))
+# Anotacao de ganho em regiao limpa e aberta (acima de Base e Pool)
+ax2.annotate('Salto de 8x na vazão\n(+701,7% vs. Base)',
+             xy=(3, rps_maxs[3] + 4.0),
+             xytext=(0.85, 31.0),
+             arrowprops=dict(arrowstyle='->', lw=1.8, color='#1a5276', connectionstyle='arc3,rad=0.18'),
+             fontsize=9, fontweight='bold', color='#154360',
+             ha='center',
+             bbox=dict(boxstyle='round,pad=0.4', facecolor='#ebf5fb', edgecolor='#2980b9', lw=1.2))
 
-fig.suptitle('Avaliação Empírica de Desempenho por Intervenção Arquitetural (n=3 rodadas)',
-             fontsize=13, fontweight='bold', y=0.98)
-fig.text(0.5, 0.01,
-         'Nota: Barras indicam a mediana amostral; linhas de erro representam os limites [mínimo, máximo] das 3 baterias de 60s com 20 VUs.',
-         ha='center', fontsize=8, color='#555555')
+fig.suptitle('Avaliação Empírica de Desempenho por Intervenção Arquitetural (n=3 rodadas de 60s / 20 VUs)',
+             fontsize=12.5, fontweight='bold', y=0.97)
+fig.text(0.5, 0.02,
+         'Nota: As barras representam a mediana amostral oficial; linhas de erro indicam a amplitude [mínimo, máximo] das 3 execuções controladas.',
+         ha='center', fontsize=8.5, color='#444444')
 
-plt.tight_layout(rect=[0, 0.04, 1, 0.94])
+plt.tight_layout(rect=[0, 0.05, 1, 0.93])
 output_path = os.path.join(os.path.dirname(__file__), 'img', 'p95-por-mudanca.png')
 plt.savefig(output_path, dpi=300)
 print(f'Grafico salvo com sucesso em: {output_path}')
