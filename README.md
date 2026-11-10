@@ -42,6 +42,32 @@ Seguindo o método científico com medições em triplicata (20 usuários virtua
 
 ---
 
+### Como Interpretar os Relatórios de Medição (`resultados/`)
+
+Cada execução do script de carga gera uma pasta imutável em `resultados/` com métricas detalhadas. Para interpretar os dados com rigor científico:
+- **Vazão (`Requisições/s` em `resumo.txt`):** Mede a taxa de vazão sustentada do sistema sob a concorrência contínua de 20 usuários virtuais durante 60 segundos. O avanço de 3,62 para 29,02 req/s indica que o sistema passou a atender 8 vezes mais tráfego pelo mesmo custo operacional.
+- **Mediana vs. Percentis p95/p99:** A **mediana** reflete o tempo de resposta do usuário típico (50% das requisições foram mais rápidas que esse valor). Os percentis de cauda (**p95** e **p99**) revelam a experiência dos usuários mais penalizados quando requisições ficam enfileiradas esperando liberação de conexões ou I/O de disco.
+- **CPU e Memória (`recursos.txt`):** No Docker, 100% equivale a 1 núcleo inteiro de CPU. 
+  - Na *Linha de Base*, o banco operava em **97,1% de CPU** (saturação quase absoluta da sua cota de 1,0 CPU), enquanto a API registrava apenas **5,0%** (o Node.js ficava bloqueado aguardando o socket do PostgreSQL).
+  - Com a introdução de índices (Etapa 02), a CPU da API subiu temporariamente para **20,9%**, pois o Node.js passou a processar milhares de objetos em memória trazidos da rota analítica.
+  - Com o pushdown SQL (Etapa 03), a CPU da API recuou para **3,1%** e o consumo médio de RAM caiu de 58,3 MiB para **26,4 MiB**, demonstrando desoneração real da camada de aplicação.
+- **Protocolo de Tríade e Mediana:** Cada experimento é executado 3 vezes consecutivas sob as mesmas condições ambientais. Como variações de escalonamento do sistema operacional podem causar oscilações de até 30% entre rodadas individuais, a **mediana das 3 execuções** é o critério estatístico adotado para anular ruídos e evitar viés de medições isoladas.
+
+---
+
+### Análise Aprofundada das Rotas de Relatório (`/relatorios`)
+
+As rotas sob o prefixo `/relatorios` possuem comportamento analítico distinto das rotas transacionais de consulta a entidades:
+
+1. **`GET /relatorios/vendas-por-dia` (Otimizada na Intervenção 03):**
+   - *Comportamento original:* Executava um `SELECT` filtrado por período e transferia dezenas de milhares de registros completos para a aplicação Node.js (inclusive campos volumosos como `observacoes`, com ~300 bytes por tupla, descartados na resposta). O Node.js deserializava esses registros na heap V8 e calculava totalizadores via JavaScript `Map`.
+   - *Otimização aplicada:* Pushdown analítico no PostgreSQL (`GROUP BY 1`, `SUM`, `COUNT(DISTINCT)`). O volume transferido pela rede despencou de ~4 MB para menos de 5 KB por requisição, derrubando a latência mediana da rota de 5.721 ms na linha de base para **2.330 ms**.
+2. **`GET /relatorios/top-produtos` (Mapeada em `proximos-testes.md`):**
+   - *Comportamento observado:* A rota processa o somatório de receita sobre 1,5 milhão de itens na tabela `itens_pedido` para extrair os 10 produtos líderes. Mesmo com índices, o motor precisa ler e calcular a soma de milhões de linhas a cada requisição, resultando em latência de ~4,7 segundos sob carga.
+   - *Diagnóstico arquitetural:* Em sistemas transacionais/analíticos híbridos, relatórios globais não devem ser computados sob demanda a cada requisição HTTP sem camada de amortização. A recomendação documentada na Ficha 02 de `proximos-testes.md` é a inserção de cache em memória (ex.: Redis ou LRU Map) com TTL curto (30 a 60s), absorvendo 99% das chamadas com resposta submilissegundo sem impacto para os dados transacionais.
+
+---
+
 ## Estrutura do Repositório
 
 ```

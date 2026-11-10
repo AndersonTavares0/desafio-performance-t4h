@@ -42,6 +42,7 @@ Seguindo a regra de escolher no máximo 2 a 3 mudanças de maior retorno sistêm
    - *Por quê:* Ataca diretamente as rotas que representam 70% da carga (`/clientes/:id/pedidos`, `/clientes?email=`, `/pedidos?status=`), transformando Seq Scans de 500k e 1,5M linhas em Index Lookups de frações de milissegundo.
    - *Risco ao contrato:* Nulo se os tipos e ordenações forem preservados.
 
-3. **Intervenção Prioritária 3: Eliminação do N+1 em `/clientes/:id/pedidos`**
-   - *Por quê:* É a rota com maior latência individual no fluxo principal (peso 20%, p95 de 20 segundos). Unificar a busca dos pedidos e itens em 1 ou 2 queries estruturadas (ou agregação JSON via SQL) elimina o congestionamento no driver.
-   - *Risco ao contrato:* Médio — exige conferência estrita dos campos e formato exato dos itens no JSON retornado.
+3. **Intervenção Prioritária 3: Pushdown de Agregação SQL em `/relatorios/vendas-por-dia`**
+   - *Por quê:* A rota transferia dezenas de milhares de registros completos (~4 MB por chamada) para agregação manual em JavaScript `Map` no Node.js. Transferir a agregação para o PostgreSQL (`GROUP BY 1`, `SUM`, `COUNT`) reduz o payload de rede para <5 KB e desonera o Event Loop da API.
+   - *Risco ao contrato:* Baixo — exige conversão explícita com `Number(...)` para atender à tipagem inteira do JSON gravado no contrato original.
+   - *Nota sobre `/clientes/:id/pedidos`:* A indexação B-tree na Intervenção 02 reduziu a latência da rota de 15.252 ms para 115 ms (mais de 100x mais rápida), resolvendo o gargalo dominante de I/O e tornando desnecessário refatorar o loop da rota, preservando a simplicidade do código da aplicação.
