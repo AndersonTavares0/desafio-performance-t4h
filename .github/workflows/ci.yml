@@ -1,0 +1,68 @@
+name: CI - Integridade e Contrato
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  validacao-contrato:
+    name: Verificacao de Sintaxe e Contrato da API
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout do repositorio
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Verificacao estatica de sintaxe (node --check)
+        run: |
+          echo "Verificando sintaxe dos fontes Node.js..."
+          node --check api/src/server.js
+          node --check api/src/banco.js
+          node --check api/src/rotas.js
+          node --check contrato/verificar.js
+          echo "Sintaxe OK em todos os arquivos."
+
+      - name: Subir containers da aplicacao (API e Banco)
+        run: |
+          docker compose up -d banco api
+
+      - name: Aguardar banco de dados e API estarem prontos
+        run: |
+          echo "Aguardando inicializacao e geracao dos dados sinteticos..."
+          for i in $(seq 1 60); do
+            STATUS=$(docker compose ps banco --format '{{.Health}}')
+            if [ "$STATUS" = "healthy" ]; then
+              echo "Banco saudavel apos ${i} iteracoes."
+              break
+            fi
+            echo "Aguardando banco ficar saudavel (iteracao $i/60, status: $STATUS)..."
+            sleep 3
+          done
+
+          echo "Aguardando API responder na porta 3000..."
+          for i in $(seq 1 30); do
+            if curl -fs http://127.0.0.1:3000/clientes/1 > /dev/null 2>&1; then
+              echo "API pronta e respondendo apos ${i} tentativas."
+              break
+            fi
+            echo "Aguardando API (tentativa $i/30)..."
+            sleep 2
+          done
+
+      - name: Executar Verificador de Contrato Oficial
+        run: |
+          ./scripts/verificar-contrato.sh comparar
+
+      - name: Encerrar containers
+        if: always()
+        run: |
+          docker compose down -v
