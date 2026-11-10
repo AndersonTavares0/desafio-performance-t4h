@@ -1,20 +1,53 @@
-# Vaga Estágio Pesquisa e Inovação 2026 - Desafios Técnicos
+# Otimização de Desempenho e Eficiência Computacional — Desafio Tech for Humans 2026
 
-Aplicação do desafio técnico da vaga de estágio em Pesquisa e Inovação da Tech for Humans. O enunciado, com a missão, as entregas e os critérios de avaliação, é enviado na largada. Este README cobre só como instalar, rodar e medir a aplicação, e é a referência de todos os comandos.
+**Candidato:** Anderson Tavares (`anderson.g.tavares@gmail.com`)  
+**Repositório:** [AndersonTavares0/desafio-performance-t4h](https://github.com/AndersonTavares0/desafio-performance-t4h)  
+**Status:** Concluído, Medido e Auditado (Contrato 42/42 aprovado)  
+**Entrega Principal:** [Artigo Técnico-Científico (`artigo/artigo.md`)](artigo/artigo.md)
 
-A aplicação é a API de uma loja fictícia, em Node.js (Express) com PostgreSQL 16, rodando em containers. Ela funciona, mas fica lenta sob carga e gasta mais recursos do que deveria. Todos os dados são sintéticos e gerados na primeira subida: 100 mil clientes, 20 mil produtos, 500 mil pedidos e 1,5 milhão de itens de pedido.
+---
 
-## Prazo e entrega
+## Índice Rápido das Entregas
 
-- **Prazo e entregas:** estão no enunciado enviado na largada
-- **Dúvidas:** no canal combinado na largada
+- 📄 **[Artigo Técnico (`artigo/artigo.md`)](artigo/artigo.md):** Relatório científico completo no template oficial de 9 seções do edital, com 7 fontes primárias/acadêmicas citadas.
+- 🧪 **[Registro de Experimentos (`experimentos.md`)](experimentos.md):** Tabela metodológica com todas as rodadas (00 a 03), medições em triplicata, antes/depois e links para os resultados.
+- 🔬 **[Dossiê de Diagnóstico (`diagnostico/`)](diagnostico/):** Evidências salvas de planos de execução (`EXPLAIN ANALYZE`), análise de pooling e síntese diagnóstica.
+- 📚 **[Pesquisa Bibliográfica (`pesquisa/`)](pesquisa/):** Levantamento de fontes primárias (`fontes.md`) e matriz multicritério de alternativas (`alternativas-e-escolha.md`).
+- 📋 **[Catálogo de Próximos Testes (`proximos-testes.md`)](proximos-testes.md):** Fichas técnicas com o backlog de intervenções futuras priorizadas.
+- 📊 **[Resultados Brutos (`resultados/`)](resultados/):** Pastas com as medições oficiais geradas pelo script de carga k6.
 
-## Estrutura
+---
+
+## Síntese de Resultados e Otimizações
+
+A aplicação é uma API de e-commerce em Node.js 20 (Express) e PostgreSQL 16.4 sob limites rígidos de hardware (0,5 CPU / 256 MiB na API e 1,0 CPU / 512 MiB no banco), operando sobre uma base sintética de 100 mil clientes, 20 mil produtos, 500 mil pedidos e 1,5 milhão de itens.
+
+Seguindo o método científico com medições em triplicata (20 usuários virtuais por 60s, calculando a mediana), a aplicação alcançou um **salto de 8x na vazão** e **redução de 97,9% na latência**, mantendo o contrato funcional rigorosamente preservado (42/42 casos idênticos) a custo zero de infraestrutura.
+
+| Etapa / Intervenção | Vazão (req/s) | $\Delta$ vs. Base | Latência Mediana | Latência p95 | CPU Banco | CPU API | RAM API | Contrato |
+|---|---|---|---|---|---|---|---|---|
+| **00. Linha de Base** | 3,62 | — | 1.248,0 ms | 17.932,0 ms | 97,1% | 5,0% | 33,7 MiB | 42/42 |
+| **01. Connection Pool (`pg.Pool`)** | 4,81 | +32,9% | 802,0 ms | 13.320,5 ms | 96,3% | 4,9% | 40,8 MiB | 42/42 |
+| **02. Índices B-tree Estratégicos** | 28,23 | +679,8% | 82,1 ms | 4.408,9 ms | 86,9% | 20,9% | 58,3 MiB | 42/42 |
+| **03. Pushdown de Agregação SQL** | 29,02 | +701,7% | 26,5 ms | 4.428,0 ms | 89,1% | 3,1% | 26,4 MiB | 42/42 |
+
+![Evolução de Desempenho por Intervenção](artigo/img/p95-por-mudanca.png)
+
+### Principais Conquistas Técnicas:
+- **Vazão Multiplicada por 8x:** O throughput saltou de 3,62 req/s para 29,02 req/s sem elevar nenhuma cota de recursos no `docker-compose.yml`.
+- **Queda de 97,9% na Latência Mediana Global:** Reduzida de 1.248,0 ms para 26,5 ms.
+- **Aceleração da Rota Crítica `/clientes/:id/pedidos`:** Latência mediana despencou de 15.252,4 ms para 66,9 ms (-99,6%), transformando varreduras sequenciais completas em 500k e 1,5M de linhas em Index Scans logarítmicos.
+- **Alívio do Runtime Node.js:** O pushdown SQL descarregou o Event Loop da API, derrubando o uso de CPU de 20,9% para 3,1% e o uso de memória de 58,3 MiB para 26,4 MiB.
+- **Contrato 100% Mantido:** 42 de 42 casos de teste permaneceram idênticos ao padrão de referência.
+
+---
+
+## Estrutura do Repositório
 
 ```
-Vaga - Estágio Pesquisa e Inovação 2026/
-├── AGENTS.md                  # instruções para agentes de IA (o CLAUDE.md aponta para ele)
-├── CLAUDE.md                  # diretrizes de execução e governança técnica
+desafio-performance-t4h/
+├── AGENTS.md                  # instruções para agentes de IA
+├── CLAUDE.md                  # diretrizes de governança e regras do autor
 ├── docker-compose.yml         # API, banco e as ferramentas de medição
 ├── api/                       # código da API (Express + pg) e Dockerfile
 ├── banco/                     # esquemas, gerador de dados e índices adicionais
@@ -28,29 +61,14 @@ Vaga - Estágio Pesquisa e Inovação 2026/
 ├── experimentos.md            # registro formal de todas as rodadas e medições
 ├── proximos-testes.md         # catálogo de intervenções futuras priorizadas
 ├── artigo/
-│   └── artigo.md              # artigo técnico-científico com metodologia e resultados
+│   ├── artigo.md              # artigo técnico-científico com metodologia e resultados
+│   └── img/                   # gráficos e diagramas do artigo
 └── resultados/                # pastas com os dados brutos de cada medição
 ```
 
-## Síntese de Resultados e Otimizações
+---
 
-A aplicação foi submetida a um ciclo rigoroso de diagnóstico, fundamentação teórica, implementação e medição empírica (3 execuções com mediana por mudança, 20 VUs por 60s, contrato de 42 casos rigorosamente mantido).
-
-| Etapa / Intervenção | Vazão (req/s) | $\Delta$ vs. Base | Latência Mediana | Latência p95 | CPU Banco | CPU API | RAM API | Contrato |
-|---|---|---|---|---|---|---|---|---|
-| **00. Linha de Base** | 3,62 | — | 1.248,0 ms | 17.932,0 ms | 97,1% | 5,0% | 33,7 MiB | 42/42 |
-| **01. Connection Pool (`pg.Pool`)** | 4,81 | +32,9% | 802,0 ms | 13.320,5 ms | 96,3% | 4,9% | 40,8 MiB | 42/42 |
-| **02. Índices B-tree Estratégicos** | 28,23 | +679,8% | 82,1 ms | 4.408,9 ms | 86,9% | 20,9% | 58,3 MiB | 42/42 |
-| **03. Pushdown de Agregação SQL** | 29,02 | +701,7% | 26,5 ms | 4.428,0 ms | 89,1% | 3,1% | 26,4 MiB | 42/42 |
-
-### Principais Ganhos Técnicos
-- **Vazão Multiplicada por 8x:** O throughput saltou de 3,62 req/s para 29,02 req/s a custo financeiro zero de infraestrutura (mantidos os limites de 0,5 CPU / 256 MiB na API e 1,0 CPU / 512 MiB no banco).
-- **Queda de 97,9% na Latência Mediana Global:** Reduzida de 1.248 ms para 26,5 ms.
-- **Aceleração da Rota Crítica `/clientes/:id/pedidos`:** Latência mediana despencou de 15.252,4 ms para 66,9 ms (redução de 99,6%), transformando varreduras sequenciais em 500k e 1,5M de linhas em Index Scans logarítmicos.
-- **Alívio de CPU e Memória na API:** O pushdown SQL descarregou o Event Loop da API, derrubando o uso de CPU de 20,9% para 3,1% e o uso de memória de 58,3 MiB para 26,4 MiB.
-- **Contrato Estritamente Mantido:** 42 de 42 casos de teste permaneceram idênticos ao padrão de referência.
-
-Para mais detalhes sobre metodologia, fundamentos e referências bibliográficas, consulte o [artigo técnico](artigo/artigo.md) e o histórico de [experimentos](experimentos.md).
+## Guia de Instalação, Execução e Medição (Referência Original)
 
 ## Requisitos
 

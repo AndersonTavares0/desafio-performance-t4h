@@ -65,6 +65,8 @@ Cada mudança seguiu o protocolo de medição (3 baterias de 60s com 20 VUs, cal
 
 O resultado consolidado final alcançou **29,02 req/s** (**+701,7%** vs. base de 3,62 req/s) e latência mediana de **26,5 ms** (contra 1.248,0 ms na base), preservando rigorosamente todas as 42 respostas da aplicação original.
 
+![p95 antes e depois de cada mudança](img/p95-por-mudanca.png)
+
 ## 7. Limites e testes futuros
 
 A solução implementada apresenta os seguintes limites e premissas operacionais:
