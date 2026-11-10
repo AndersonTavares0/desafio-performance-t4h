@@ -1,13 +1,24 @@
-# Otimização de Desempenho e Eficiência Computacional — Desafio Tech for Humans 2026
+# Vaga Estágio Pesquisa e Inovação 2026 - Desafios Técnicos
+
+Aplicação do desafio técnico da vaga de estágio em Pesquisa e Inovação da Tech for Humans. O enunciado, com a missão, as entregas e os critérios de avaliação, é enviado na largada. Este README cobre só como instalar, rodar e medir a aplicação, e é a referência de todos os comandos.
+
+A aplicação é a API de uma loja fictícia, em Node.js (Express) com PostgreSQL 16, rodando em containers. Ela funciona, mas fica lenta sob carga e gasta mais recursos do que deveria. Todos os dados são sintéticos e gerados na primeira subida: 100 mil clientes, 20 mil produtos, 500 mil pedidos e 1,5 milhão de itens de pedido.
+
+## Prazo e entrega
+
+- **Prazo e entregas:** estão no enunciado enviado na largada
+- **Dúvidas:** no canal combinado na largada
+
+---
+
+## Entregas do Candidato (Anderson Tavares)
 
 **Candidato:** Anderson Tavares (`anderson.g.tavares@gmail.com`)  
 **Repositório:** [AndersonTavares0/desafio-performance-t4h](https://github.com/AndersonTavares0/desafio-performance-t4h)  
 **Status:** Concluído, Medido e Auditado (Contrato 42/42 aprovado)  
-**Entrega Principal:** [Artigo Técnico-Científico (`artigo/artigo.md`)](artigo/artigo.md)
+**Artigo Principal:** [Artigo Técnico-Científico (`artigo/artigo.md`)](artigo/artigo.md)
 
----
-
-## Índice Rápido das Entregas
+### Documentos do Desafio
 
 - **[Artigo Técnico (`artigo/artigo.md`)](artigo/artigo.md):** Relatório científico completo no template oficial de 9 seções do edital, com 7 fontes primárias/acadêmicas citadas.
 - **[Registro de Experimentos (`experimentos.md`)](experimentos.md):** Tabela metodológica com todas as rodadas (00 a 03), medições em triplicata, antes/depois e links para os resultados.
@@ -16,13 +27,9 @@
 - **[Catálogo de Próximos Testes (`proximos-testes.md`)](proximos-testes.md):** Fichas técnicas com o backlog de intervenções futuras priorizadas.
 - **[Resultados Brutos (`resultados/`)](resultados/):** Pastas com as medições oficiais geradas pelo script de carga k6.
 
----
+### Síntese de Resultados das Otimizações
 
-## Síntese de Resultados e Otimizações
-
-A aplicação é uma API de e-commerce em Node.js 20 (Express) e PostgreSQL 16.4 sob limites rígidos de hardware (0,5 CPU / 256 MiB na API e 1,0 CPU / 512 MiB no banco), operando sobre uma base sintética de 100 mil clientes, 20 mil produtos, 500 mil pedidos e 1,5 milhão de itens.
-
-Seguindo o método científico com medições em triplicata (20 usuários virtuais por 60s, calculando a mediana), a aplicação alcançou um **salto de 8x na vazão** e **redução de 97,9% na latência**, preservando a conformidade das 42 respostas do contrato a custo zero de infraestrutura.
+Avaliadas sob 20 usuários virtuais por 60s (mediana de 3 execuções), as intervenções alcançaram **8x mais vazão** (+701,7%) e **redução de 97,9% na latência mediana**, com **42/42 contratos preservados** a custo zero de infraestrutura:
 
 | Etapa / Intervenção | Vazão (req/s) | Ganho vs. Base | Latência Mediana | Latência p95 | CPU Banco | CPU API | RAM API | Contrato |
 |---|---|---|---|---|---|---|---|---|
@@ -33,47 +40,13 @@ Seguindo o método científico com medições em triplicata (20 usuários virtua
 
 ![Evolução de Desempenho por Intervenção](artigo/img/p95-por-mudanca.png)
 
-### Principais Conquistas Técnicas:
-- **Vazão Multiplicada por 8x:** O throughput saltou de 3,62 req/s para 29,02 req/s sem elevar nenhuma cota de recursos no `docker-compose.yml`.
-- **Queda de 97,9% na Latência Mediana Global:** Reduzida de 1.248,0 ms para 26,5 ms.
-- **Aceleração da Rota Crítica `/clientes/:id/pedidos`:** Latência mediana despencou de 15.252,4 ms para 66,9 ms (-99,6%), transformando varreduras sequenciais completas em 500k e 1,5M de linhas em Index Scans logarítmicos.
-- **Alívio do Runtime Node.js:** O pushdown SQL descarregou o Event Loop da API, derrubando o uso de CPU de 20,9% para 3,1% e o uso de memória de 58,3 MiB para 26,4 MiB.
-- **Contrato Funcional Preservado:** 42 de 42 casos de teste permaneceram idênticos ao padrão de referência gravado antes das intervenções.
-
----
-
-### Como Interpretar os Relatórios de Medição (`resultados/`)
-
-Cada execução do script de carga gera uma pasta imutável em `resultados/` com métricas detalhadas. Para interpretar os dados com rigor científico:
-- **Vazão (`Requisições/s` em `resumo.txt`):** Mede a taxa de vazão sustentada do sistema sob a concorrência contínua de 20 usuários virtuais durante 60 segundos. O avanço de 3,62 para 29,02 req/s indica que o sistema passou a atender 8 vezes mais tráfego pelo mesmo custo operacional.
-- **Mediana vs. Percentis p95/p99:** A **mediana** reflete o tempo de resposta do usuário típico (50% das requisições foram mais rápidas que esse valor). Os percentis de cauda (**p95** e **p99**) revelam a experiência dos usuários mais penalizados quando requisições ficam enfileiradas esperando liberação de conexões ou I/O de disco.
-- **CPU e Memória (`recursos.txt`):** No Docker, 100% equivale a 1 núcleo inteiro de CPU. 
-  - Na *Linha de Base*, o banco operava em **97,1% de CPU** (saturação quase absoluta da sua cota de 1,0 CPU), enquanto a API registrava apenas **5,0%** (o Node.js ficava bloqueado aguardando o socket do PostgreSQL).
-  - Com a introdução de índices (Etapa 02), a CPU da API subiu temporariamente para **20,9%**, pois o Node.js passou a processar milhares de objetos em memória trazidos da rota analítica.
-  - Com o pushdown SQL (Etapa 03), a CPU da API recuou para **3,1%** e o consumo médio de RAM caiu de 58,3 MiB para **26,4 MiB**, demonstrando desoneração real da camada de aplicação.
-- **Protocolo de Tríade e Mediana:** Cada experimento é executado 3 vezes consecutivas sob as mesmas condições ambientais. Como variações de escalonamento do sistema operacional podem causar oscilações de até 30% entre rodadas individuais, a **mediana das 3 execuções** é o critério estatístico adotado para anular ruídos e evitar viés de medições isoladas.
-- **Sensibilidade ao Hardware e Reprodutibilidade:** Os valores absolutos de vazão (req/s) e latência refletem o ambiente de medição local (host Linux com 16 CPUs). Em máquinas com configurações distintas, os valores absolutos variam, mas as grandezas relativas de ganho (~8x em vazão, alívio de CPU e queda de latência nas junções) e a conformidade do contrato funcional se mantêm quando observados os mesmos limites de recursos no Docker.
-
----
-
-### Análise Aprofundada das Rotas de Relatório (`/relatorios`)
-
-As rotas sob o prefixo `/relatorios` possuem comportamento analítico distinto das rotas transacionais de consulta a entidades:
-
-1. **`GET /relatorios/vendas-por-dia` (Otimizada na Intervenção 03):**
-   - *Comportamento original:* Executava um `SELECT` filtrado por período e transferia dezenas de milhares de registros completos para a aplicação Node.js (inclusive campos volumosos como `observacoes`, com ~300 bytes por tupla, descartados na resposta). O Node.js deserializava esses registros na heap V8 e calculava totalizadores via JavaScript `Map`.
-   - *Otimização aplicada:* Pushdown analítico no PostgreSQL (`GROUP BY 1`, `SUM`, `COUNT(DISTINCT)`). O volume transferido pela rede despencou de ~4 MB para menos de 5 KB por requisição, derrubando a latência mediana da rota de 5.721 ms na linha de base para **2.330 ms**.
-2. **`GET /relatorios/top-produtos` (Mapeada em `proximos-testes.md`):**
-   - *Comportamento observado:* A rota processa o somatório de receita sobre 1,5 milhão de itens na tabela `itens_pedido` para extrair os 10 produtos líderes. Mesmo com índices, o motor precisa ler e calcular a soma de milhões de linhas a cada requisição, resultando em latência de ~4,7 segundos sob carga.
-   - *Diagnóstico arquitetural:* Em sistemas transacionais/analíticos híbridos, relatórios globais não devem ser computados sob demanda a cada requisição HTTP sem camada de amortização. A recomendação documentada na Ficha 02 de `proximos-testes.md` é a inserção de cache em memória (ex.: Redis ou LRU Map) com TTL curto (30 a 60s), absorvendo 99% das chamadas com resposta submilissegundo sem impacto para os dados transacionais.
-
 ---
 
 ## Estrutura do Repositório
 
 ```
 desafio-performance-t4h/
-├── .github/workflows/ci.yml   # CI/CD no GitHub Actions (checagem sintática e contrato)
+├── .github/workflows/ci.yml   # CI/CD no GitHub Actions (validação estática e contrato)
 ├── AGENTS.md                  # instruções para agentes de IA
 ├── CLAUDE.md                  # diretrizes de governança e regras do autor
 ├── docker-compose.yml         # API, banco e as ferramentas de medição
@@ -88,15 +61,11 @@ desafio-performance-t4h/
 ├── pesquisa/                  # levantamento bibliográfico e matriz de decisão
 ├── experimentos.md            # registro formal de todas as rodadas e medições
 ├── proximos-testes.md         # catálogo de intervenções futuras priorizadas
-├── artigo/
-│   ├── artigo.md              # artigo técnico-científico com metodologia e resultados
-│   ├── gerar_grafico.py       # script reprodutível para renderização do gráfico
-│   └── img/                   # gráficos e diagramas do artigo (300 DPI)
+├── artigo/                    # artigo técnico, gráficos e script gerador
 └── resultados/                # pastas com os dados brutos de cada medição
 ```
 
-> **Distinção Metodológica entre CI e Benchmarking:**  
-> O pipeline automatizado do GitHub Actions é restrito à **validação funcional de contrato** (42 casos) e análise estática de sintaxe. A reprodução das **medições estatísticas de carga (k6)** deve ser conduzida localmente em ambiente dedicado com `scripts/medir.sh`, pois runners em nuvem multi-inquilino introduzem ruído de virtualização (*noisy neighbors*) que distorce medições de cauda (p95 e p99).
+> **Nota sobre CI:** O pipeline do GitHub Actions valida a sintaxe estática e a integridade de contrato (42 casos). As medições de carga estatísticas com `k6` devem ser executadas localmente com `scripts/medir.sh` em ambiente isolado.
 
 ---
 
