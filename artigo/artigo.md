@@ -12,14 +12,15 @@ Uma API em Node.js e PostgreSQL operava sob lentidão severa com 20 usuários vi
 
 A aplicação opera em dois containers Docker limitados a 0,5 CPU e 256 MiB (API Node.js 20) e 1,0 CPU e 512 MiB (PostgreSQL 16), com base sintética de 100 mil clientes, 20 mil produtos, 500 mil pedidos e 1,5 milhão de itens. Na linha de base ([20261110-095041-00-linha-de-base](../resultados/20261110-095041-00-linha-de-base/)), o sistema registrou 3,62 req/s e p95 de 17.932,0 ms, com CPU do banco em 97,1% e API em 5,0%.
 
-Inspeções salvas em [diagnostico/](../diagnostico/) identificaram três causas-raiz:
-1. **Conexões Efêmeras:** `api/src/db.js` criava um `new pg.Client()` por query. Como o PostgreSQL adota processos via `fork()`, o ciclo contínuo de handshakes gerou contenção de CPU no SO ([02-conexao-e-pooling.txt](../diagnostico/02-conexao-e-pooling.txt)), atingindo até 30 forks por requisição em `/clientes/:id/pedidos`.
-2. **Varreduras Sequenciais em Chaves Estrangeiras:** O `EXPLAIN (ANALYZE, BUFFERS)` revelou ausência de índices secundários ([01-explain-queries-linha-de-base.txt](../diagnostico/01-explain-queries-linha-de-base.txt)). Buscas por `cliente_id` liam 500 mil pedidos e 1,5 milhão de itens via `Seq Scan`, elevando a rota `/clientes/:id/pedidos` a 15.252,4 ms.
-3. **Agregação In-Memory no Node.js:** A rota `/relatorios/vendas-por-dia` transferia milhares de tuplas para o Node.js agrupar com `Map`, gerando sobrecarga de memória e processamento.
+Inspeções salvas em [diagnostico/](../diagnostico/) revelaram três problemas:
+1. **Conexões Efêmeras:** `api/src/db.js` criava `new pg.Client()` por consulta. No PostgreSQL (baseado em processos via `fork`), o ciclo repetido de autenticação gerou sobrecarga no SO ([02-conexao-e-pooling.txt](../diagnostico/02-conexao-e-pooling.txt)), atingindo até 30 forks por requisição em `/clientes/:id/pedidos`.
+2. **Varreduras Sequenciais:** O `EXPLAIN (ANALYZE, BUFFERS)` revelou ausência de índices secundários ([01-explain-queries-linha-de-base.txt](../diagnostico/01-explain-queries-linha-de-base.txt)). Buscas por `cliente_id` liam 500 mil pedidos e 1,5 milhão de itens via `Seq Scan`, elevando a rota `/clientes/:id/pedidos` a 15.252,4 ms.
+3. **Agregação In-Memory:** `/relatorios/vendas-por-dia` transferia milhares de tuplas para o Node.js agrupar com `Map`, sobrecarregando o Event Loop.
 
-Hipótese 1: Conexões efêmeras saturam a CPU do banco por criação contínua de processos via `fork()`.  
-Hipótese 2: A ausência de índices em chaves estrangeiras força varreduras completas em milhões de linhas a cada junção.  
-Hipótese 3: Transferir dados analíticos brutos sobrecarrega a rede e a memória do runtime Node.js.
+Hipóteses de causa:
+- *Hipótese 1:* Conexões efêmeras saturam a CPU do banco pelo custo contínuo de `fork()`.
+- *Hipótese 2:* A ausência de índices força varreduras completas em milhões de linhas a cada junção.
+- *Hipótese 3:* Transferir dados brutos para agregação em memória sobrecarrega a rede e a CPU da API.
 
 ## 3. Estado da arte
 
@@ -44,14 +45,14 @@ Para selecionar intervenções de maior impacto e menor risco, avaliou-se a matr
 | D. Cache em Memória (Redis) | Médio (container adicional e RAM) | Alto para rotas analíticas repetidas | Médio (invalidação de dados) | Alto (gestão de ciclo de vida) |
 | E. Índice Trigrama GIN (`pg_trgm`) | Médio (extensão C e índice pesado) | Alto em buscas textuais com `ILIKE` | Baixo | Médio (extensão do PostgreSQL) |
 
-As alternativas A, B e C foram selecionadas por atacarem as causas-raiz a custo zero. A alternativa D (Redis) foi descartada por exigir novo container antes de esgotar as otimizações nativas. A alternativa E (`pg_trgm`) foi postergada por focar em rota de 15% do tráfego, enquanto as chaves estrangeiras cobriam 70% da carga. Ambas constam em [proximos-testes.md](../proximos-testes.md).
+As alternativas A, B e C foram selecionadas por atacarem as causas-raiz a custo zero e sem novos serviços. A alternativa D (Redis) foi descartada por adicionar complexidade de infraestrutura antes de esgotar os recursos nativos. A alternativa E (`pg_trgm`) foi postergada por focar em rota de 15% do tráfego, enquanto as chaves estrangeiras cobriam 70% da carga. Ambas constam em [proximos-testes.md](../proximos-testes.md).
 
 ## 5. Solução escolhida e por quê
 
 A intervenção foi conduzida em três etapas atômicas:
-1. **Connection Pooling no Driver:** Substituição de `new Client()` por `new Pool({ max: 20 })` em `api/src/db.js`. O dimensionamento para 20 conexões reflete a concorrência dos 20 usuários virtuais do teste, eliminando o custo de `fork()` sem saturar a memória do banco.
-2. **Índices B-Tree Estratégicos:** Criação de `banco/03-indices.sql` contendo 6 índices B-tree cobrindo chaves estrangeiras (`pedidos.cliente_id`, `itens_pedido.pedido_id`), índice funcional (`lower(email)`), ordenação paginada (`status, criado_em DESC`) e índice temporal. Transforma o custo de junções de varreduras lineares para buscas logarítmicas instantâneas.
-3. **Pushdown SQL em Vendas por Dia:** Reescrever `/relatorios/vendas-por-dia` em `api/src/rotas.js` delegando `GROUP BY`, `SUM` e `COUNT` ao PostgreSQL, mapeando com `Number(...)` para garantir o contrato. Descartou-se manter a agregação em memória no JavaScript para eliminar desperdício de CPU e RAM no Node.js.
+1. **Connection Pooling no Driver:** Adoção de `new Pool({ max: 20 })` em `api/src/db.js`, refletindo a concorrência de 20 VUs e eliminando o custo de `fork()` sem saturar a memória do banco.
+2. **Índices B-Tree Estratégicos:** Criação de `banco/03-indices.sql` com 6 índices cobrindo chaves estrangeiras (`pedidos.cliente_id`, `itens_pedido.pedido_id`), busca funcional (`lower(email)`), paginação (`status, criado_em DESC`) e intervalo temporal. Transforma o custo de junções de varreduras lineares para buscas logarítmicas.
+3. **Pushdown SQL em Vendas por Dia:** Reescrever `/relatorios/vendas-por-dia` em `api/src/rotas.js` delegando `GROUP BY`, `SUM` e `COUNT` ao PostgreSQL, mapeando com `Number(...)` para garantir o contrato. Descartou-se agregar no JavaScript para eliminar desperdício de CPU e RAM na API.
 
 ## 6. Experimento e resultado
 
@@ -59,11 +60,14 @@ Cada mudança seguiu o protocolo oficial (3 baterias de 60s com 20 VUs, calculan
 
 | Mudança | Hipótese | p95 antes → depois | req/s antes → depois | CPU/memória | Pastas de resultados | Conclusão |
 |---|---|---|---|---|---|---|
-| **01-connection-pool** | Reutilizar conexões elimina sobrecarga de forks | 17.932 ms → 13.321 ms (-25,7%) | 3,62 → 4,81 (+32,9%) | Banco: 97,1% → 96,3%<br>API: 5,0% → 4,9% (RAM: 40,8 MiB) | [01-connection-pool](../resultados/20261110-100637-01-connection-pool/) | Vazão aumentou 32,9% e a rota simples `/clientes/:id` caiu de 296,9 ms para 88,1 ms. Banco seguiu saturado por falta de índices. |
-| **02-indices-banco** | Índices em chaves estrangeiras eliminam Seq Scans | 13.321 ms → 4.409 ms (-66,9%) | 4,81 → 28,23 (+486,9%) | Banco: 96,3% → 86,9%<br>API: 4,9% → 20,9% (RAM: 58,3 MiB) | [02-indices-banco](../resultados/20261110-101549-02-indices-banco/) | Salto de quase 6x na vazão. A rota `/clientes/:id/pedidos` caiu de 15.252 ms para 115 ms (>100x mais rápida). Contrato 42/42. |
-| **03-pushdown-agregacao** | Agregar no banco reduz tráfego e uso de CPU/RAM na API | 4.409 ms → 4.428 ms (estável) | 28,23 → 29,02 (+2,8%) | Banco: 86,9% → 89,1%<br>API: 20,9% → 3,1% (RAM: 26,4 MiB) | [03-pushdown-agregacao](../resultados/20261110-102601-03-pushdown-agregacao/) | Latência mediana global caiu para 26,5 ms. A CPU da API recuou 85,2% e a RAM caiu pela metade. Contrato 42/42 mantido. |
+| **01-connection-pool** | Reutilizar conexões elimina sobrecarga de forks | 17.932 ms → 13.321 ms (-25,7%) | 3,62 → 4,81 (+32,9%) | Banco: 97,1% → 96,3%<br>API: 5,0% → 4,9% (RAM: 40,8 MiB) | [01-connection-pool](../resultados/20261110-100637-01-connection-pool/) | Vazão aumentou 32,9% e `/clientes/:id` caiu para 88,1 ms. Banco continuou saturado por falta de índices. |
+| **02-indices-banco** | Índices em chaves estrangeiras eliminam Seq Scans | 13.321 ms → 4.409 ms (-66,9%) | 4,81 → 28,23 (+486,9%) | Banco: 96,3% → 86,9%<br>API: 4,9% → 20,9% (RAM: 58,3 MiB) | [02-indices-banco](../resultados/20261110-101549-02-indices-banco/) | Salto de 6x na vazão. A rota `/clientes/:id/pedidos` caiu de 15.252 ms para 115 ms (>100x mais rápida). Contrato 42/42. |
+| **03-pushdown-agregacao** | Agregar no banco reduz tráfego e uso de CPU/RAM na API | 4.409 ms → 4.428 ms (estável) | 28,23 → 29,02 (+2,8%) | Banco: 86,9% → 89,1%<br>API: 20,9% → 3,1% (RAM: 26,4 MiB) | [03-pushdown-agregacao](../resultados/20261110-102601-03-pushdown-agregacao/) | Latência mediana caiu para 26,5 ms. A CPU da API recuou 85,2% e a RAM caiu pela metade. Contrato 42/42. |
 
-O resultado consolidado final alcançou **29,02 req/s** (**+701,7%** vs. base de 3,62 req/s) e latência mediana de **26,5 ms** (contra 1.248,0 ms na base), preservando rigorosamente todas as 42 respostas da aplicação original.
+O resultado consolidado final alcançou **29,02 req/s** (**+701,7%** vs. base de 3,62 req/s) e latência mediana de **26,5 ms** (contra 1.248,0 ms na base), preservando todas as 42 respostas da aplicação original.
+
+**O que não funcionou e limitações dos ganhos:**  
+O pool de conexões isolado não aliviou a CPU do banco (recuo sutil de 97,1% para 96,3%), pois não resolve varreduras sequenciais. Já o pushdown SQL não reduziu o p95 global (manteve-se em ~4,4 s), pois a cauda continuou dominada pela rota não indexada `/relatorios/top-produtos` (~4,7 s), demonstrando que pushdown desonera a aplicação, mas não substitui cache em rotas analíticas pesadas.
 
 ![p95 antes e depois de cada mudança](img/p95-por-mudanca.png)
 
