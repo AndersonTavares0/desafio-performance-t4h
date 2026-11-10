@@ -94,4 +94,4 @@ Testes futuros priorizados em [proximos-testes.md](../proximos-testes.md):
 
 ## 9. Uso de IA
 
-Usei IA como acelerador operacional para rascunhar variações de queries analíticas de pushdown em SQL, agilizar consultas na documentação técnica do PostgreSQL e estruturar scripts auxiliares de automação (CI e geração de gráficos). Todas as intervenções foram validadas sob três barreiras: checagem estrita de contrato (42/42 casos idênticos ao baseline), auditoria dos planos de execução via EXPLAIN ANALYZE no psql e três baterias empíricas de carga pelo k6.
+Usei IA como apoio para explorar alternativas de consultas SQL, consultar documentações técnicas, organizar o trabalho e auxiliar na criação de scripts. Revisei as sugestões e validei as mudanças sob três barreiras: 42 testes de contrato garantindo conformidade total da API, EXPLAIN ANALYZE no PostgreSQL para auditar os planos de consulta e baterias de teste de carga com o k6 para comparar o desempenho antes e depois de cada intervenção.
