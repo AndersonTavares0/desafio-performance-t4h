@@ -94,4 +94,4 @@ Testes futuros priorizados em [proximos-testes.md](../proximos-testes.md):
 
 ## 9. Uso de IA
 
-Ferramentas de inteligência artificial foram empregadas exclusivamente como suporte na busca sintática de documentações oficiais e na formatação de tabelas Markdown. Todos os diagnósticos de causa-raiz, hipóteses, implementações de código SQL e JavaScript, execuções de teste em terminal e compilações de dados foram projetados, auditados e validados pelo autor.
+Usei IA durante o processo como apoio para acelerar consultas na documentação técnica (como detalhes da API do node-postgres e funções de data do PostgreSQL) e para organizar a estrutura das tabelas em Markdown. Nenhuma alteração foi aceita sem validação: formulei as hipóteses, escrevi e testei cada índice e query no psql/Node.js, e todos os números apresentados vieram diretamente das saídas do script de carga validadas pelo verificador de contrato.
