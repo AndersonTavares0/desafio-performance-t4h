@@ -60,31 +60,31 @@ Protocolo do edital: 3 baterias de 60 s com 20 VUs; medianas:
 
 | Mudança | Hipótese | p95 antes → depois | req/s antes → depois | CPU/memória | Pastas de resultados | Conclusão |
 |---|---|---|---|---|---|---|
-| **01-connection-pool** | Reutilizar conexões elimina sobrecarga de forks | 17.932 ms → 13.321 ms (-25,7%) | 3,62 → 4,81 (+32,9%) | Banco: 97,1% → 96,3%<br>API: 5,0% → 4,9% (RAM: 40,8 MiB) | [01-connection-pool](../resultados/20261110-100637-01-connection-pool/)<br>[2](../resultados/20261110-100820-01-connection-pool/)<br>[3](../resultados/20261110-100958-01-connection-pool/) | Vazão subiu 32,9% e `/clientes/:id` caiu para 88 ms. Banco continuou no teto por falta de índices. |
-| **02-indices-banco** | Índices em chaves estrangeiras eliminam Seq Scans | 13.321 ms → 4.409 ms (-66,9%) | 4,81 → 28,23 (+486,9%) | Banco: 96,3% → 86,9%<br>API: 4,9% → 20,9% (RAM: 58,3 MiB) | [02-indices-banco](../resultados/20261110-101549-02-indices-banco/)<br>[2](../resultados/20261110-101731-02-indices-banco/)<br>[3](../resultados/20261110-101905-02-indices-banco/) | Salto de 6x na vazão. A rota `/clientes/:id/pedidos` caiu para 115 ms. Contrato mantido. |
-| **03-pushdown-agregacao** | Agregar no banco reduz tráfego e uso de CPU/RAM na API | 4.409 ms → 4.428 ms (estável) | 28,23 → 29,02 (+2,8%) | Banco: 86,9% → 89,1%<br>API: 20,9% → 3,1% (RAM: 26,4 MiB) | [03-pushdown-agregacao](../resultados/20261110-102601-03-pushdown-agregacao/)<br>[2](../resultados/20261110-102739-03-pushdown-agregacao/)<br>[3](../resultados/20261110-102913-03-pushdown-agregacao/) | p95 estável; medianas por rota praticamente inalteradas. CPU da API recuou 85% e RAM caiu pela metade. Contrato mantido. |
+| **01-connection-pool** | Reutilizar conexões elimina sobrecarga de forks | 17.932,0 ms → 13.320,5 ms (-25,7%) | 3,62 → 4,81 (+32,9%) | Banco: 97,1% → 96,3%<br>API: 5,0% → 4,9% (RAM: 40,8 MiB) | [01-connection-pool](../resultados/20261110-100637-01-connection-pool/)<br>[2](../resultados/20261110-100820-01-connection-pool/)<br>[3](../resultados/20261110-100958-01-connection-pool/) | Vazão subiu 32,9% e `/clientes/:id` caiu para 88 ms. Banco continuou no teto por falta de índices. |
+| **02-indices-banco** | Índices em chaves estrangeiras eliminam Seq Scans | 13.320,5 ms → 4.408,9 ms (-66,9%) | 4,81 → 28,23 (+486,9%) | Banco: 96,3% → 86,9%<br>API: 4,9% → 20,9% (RAM: 58,3 MiB) | [02-indices-banco](../resultados/20261110-101549-02-indices-banco/)<br>[2](../resultados/20261110-101731-02-indices-banco/)<br>[3](../resultados/20261110-101905-02-indices-banco/) | Salto de 6x na vazão. A rota `/clientes/:id/pedidos` caiu para 115 ms. Contrato mantido. |
+| **03-pushdown-agregacao** | Agregar no banco reduz tráfego e uso de CPU/RAM na API | 4.408,9 ms → 4.428,0 ms (estável) | 28,23 → 29,02 (+2,8%) | Banco: 86,9% → 89,1%<br>API: 20,9% → 3,1% (RAM: 26,4 MiB) | [03-pushdown-agregacao](../resultados/20261110-102601-03-pushdown-agregacao/)<br>[2](../resultados/20261110-102739-03-pushdown-agregacao/)<br>[3](../resultados/20261110-102913-03-pushdown-agregacao/) | p95 estável; medianas por rota praticamente inalteradas. CPU da API recuou 85% e RAM caiu pela metade. Contrato mantido. |
 
-No resultado final, a vazão chegou a **29,02 req/s** (**+701,7%** sobre a base) e a mediana a **26,5 ms** (era 1.248,0 ms), com as 42 respostas do contrato preservadas.
+A vazão final foi de **29,02 req/s** (**+701,7%** sobre a base) e a mediana a **26,5 ms** (era 1.248,0 ms), com as 42 respostas do contrato preservadas.
 
 A mediana global usa a mistura de rotas concluídas. A queda de 82,1 para 26,5 ms entre 02 e 03 não é efeito do pushdown: as medianas por rota ficaram estáveis (`vendas-por-dia`: 2.308,6 → 2.330,0 ms) e o +2,8% de vazão está dentro da variação entre execuções. O ganho do pushdown é de recursos: CPU da API de 20,9% para 3,1% e RAM de 58,3 para 26,4 MiB.
 
-**O que não funcionou e por quê:**  
-O pool isolado não destravou o banco (CPU de 97% para 96%), pois o gargalo eram as buscas sem índice. O pushdown não reduziu o p95 global (~4,4 s), puxado por duas consultas pesadas: paginação profunda via OFFSET em `/pedidos` (p95 de ~10 s) e somatório de 1,5 milhão de itens em `top-produtos` (~4,7 s). O pushdown poupou CPU e RAM na API, mas não essa cauda.
+**O que não funcionou:**
+O pool isolado não destravou o banco (CPU de 97% para 96%), pois o gargalo eram as buscas sem índice. O pushdown não reduziu o p95 global (~4,4 s), puxado por duas consultas pesadas: paginação profunda via OFFSET em `/pedidos` (p95 de ~11 s) e somatório de 1,5 milhão de itens em `top-produtos` (~4,7 s). O pushdown poupou CPU e RAM na API, mas não essa cauda.
 
 ![p95 antes e depois de cada mudança](img/p95-por-mudanca.png)
 
 ## 7. Limites e testes futuros
 
-A solução tem limites práticos que precisam ser considerados:
-1. **Sobrecarga em Escrita:** Os 6 índices ocupam ~90 MiB (medido em [diagnostico/05](../diagnostico/05-tamanho-indices.txt)) e geram manutenção de páginas em `INSERT`/`UPDATE`, exigindo reavaliação sob cargas de escrita.
-2. **Busca Textual sem Índice:** A rota `/produtos/busca` ainda utiliza `ILIKE '%termo%'`, exigindo varredura sequencial em 20 mil produtos.
-3. **Amostragem e Hardware:** Seguimos o protocolo de 3 baterias (n=3). As métricas absolutas refletem a máquina de teste (16 CPUs, Linux); em outro hardware os valores mudam. Espera-se que as proporções se mantenham, o que não medimos; em produção, recomendam-se n >= 5 com intervalo de confiança.
-4. **Pico de CPU em `recursos.txt`:** O campo `cpu_max` não é confiável: o `awk` do `medir.sh` compara percentuais como texto (`9,6` > `46,9`) e chega a registrar máximo menor que a média. Como a régua não pode ser editada, usamos a média de CPU do `recursos.csv`, não o pico.
+Limites práticos:
+1. **Sobrecarga em Escrita:** Os 6 índices ocupam ~90 MiB (medido em [diagnostico/05](../diagnostico/05-tamanho-indices.txt)) e exigem manutenção de páginas em `INSERT`/`UPDATE`, a reavaliar sob carga de escrita.
+2. **Busca Textual sem Índice:** `/produtos/busca` ainda usa `ILIKE '%termo%'`, varrendo 20 mil produtos.
+3. **Amostragem e Hardware:** Seguimos o protocolo de 3 baterias (n=3). As métricas absolutas valem para a máquina de teste (16 CPUs, Linux); em outro hardware mudam. Espera-se que as proporções se mantenham, o que não medimos. Em produção, n >= 5 com intervalo de confiança.
+4. **Métrica de CPU:** O `cpu_max` do `recursos.txt` não é confiável: o `awk` do `medir.sh` compara percentuais como texto (`9,6` > `46,9`) e registra máximo menor que a média. Sem poder editar a régua, usamos a `cpu_media`.
 
 **O que refutaria a conclusão:**  
 Nossa tese seria refutada se uma carga mista de escrita gerasse contenção de travas nas árvores B que superasse o ganho nas leituras, ou se o catálogo de produtos crescesse a ponto de tornar o `ILIKE` o gargalo único do sistema.
 
-Testes futuros priorizados em [proximos-testes.md](../proximos-testes.md): índice GIN trigrama (`pg_trgm`) para as buscas textuais, cache em memória com TTL para `/relatorios/top-produtos` e ajuste de `shared_buffers`/`work_mem`.
+Testes futuros em [proximos-testes.md](../proximos-testes.md): índice GIN trigrama (`pg_trgm`) para as buscas, cache com TTL em `/relatorios/top-produtos` e ajuste de `shared_buffers`/`work_mem`.
 
 ## 8. Referências
 
