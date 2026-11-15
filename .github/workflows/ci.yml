@@ -33,30 +33,41 @@ jobs:
 
       - name: Subir containers da aplicacao (API e Banco)
         run: |
-          docker compose up -d banco api
+          docker compose up -d --build banco api
 
       - name: Aguardar banco de dados e API estarem prontos
         run: |
           echo "Aguardando inicializacao e geracao dos dados sinteticos..."
-          for i in $(seq 1 60); do
+          STATUS=""
+          for i in $(seq 1 200); do
             STATUS=$(docker compose ps banco --format '{{.Health}}')
             if [ "$STATUS" = "healthy" ]; then
               echo "Banco saudavel apos ${i} iteracoes."
               break
             fi
-            echo "Aguardando banco ficar saudavel (iteracao $i/60, status: $STATUS)..."
+            echo "Aguardando banco ficar saudavel (iteracao $i/200, status: $STATUS)..."
             sleep 3
           done
+          if [ "$STATUS" != "healthy" ]; then
+            echo "ERRO: banco nao ficou saudavel em 600s."
+            exit 1
+          fi
 
           echo "Aguardando API responder na porta 3000..."
-          for i in $(seq 1 30); do
+          API_OK=""
+          for i in $(seq 1 60); do
             if curl -fs http://127.0.0.1:3000/clientes/1 > /dev/null 2>&1; then
               echo "API pronta e respondendo apos ${i} tentativas."
+              API_OK=1
               break
             fi
-            echo "Aguardando API (tentativa $i/30)..."
+            echo "Aguardando API (tentativa $i/60)..."
             sleep 2
           done
+          if [ -z "$API_OK" ]; then
+            echo "ERRO: API nao respondeu em 120s."
+            exit 1
+          fi
 
       - name: Executar Verificador de Contrato Oficial
         run: |

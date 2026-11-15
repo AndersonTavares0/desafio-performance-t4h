@@ -15,7 +15,7 @@ A aplicação é a API de uma loja fictícia, em Node.js (Express) com PostgreSQ
 
 **Candidato:** Anderson Tavares (`anderson.g.tavares@gmail.com`)  
 **Repositório:** [AndersonTavares0/desafio-performance-t4h](https://github.com/AndersonTavares0/desafio-performance-t4h)  
-**Status:** Concluído, Medido e Auditado (Contrato 42/42 aprovado)  
+**Status:** Concluído e medido (Contrato 42/42 aprovado)  
 **Artigo Principal:** [Artigo Técnico-Científico (`artigo/artigo.md`)](artigo/artigo.md)
 
 ### O que está no repositório
@@ -46,9 +46,9 @@ Carga de 20 usuários virtuais por 60s (mediana de 3 rodadas):
 
 ```
 desafio-performance-t4h/
-├── .github/workflows/ci.yml   # CI/CD no GitHub Actions (validação estática e contrato)
+├── .github/workflows/ci.yml   # CI no GitHub Actions (validação estática e contrato)
 ├── AGENTS.md                  # instruções para agentes de IA
-├── CLAUDE.md                  # diretrizes de governança e regras do autor
+├── CLAUDE.md                  # aponta para o AGENTS.md
 ├── docker-compose.yml         # API, banco e as ferramentas de medição
 ├── api/                       # código da API (Express + pg) e Dockerfile
 ├── banco/                     # esquemas, gerador de dados e índices adicionais
