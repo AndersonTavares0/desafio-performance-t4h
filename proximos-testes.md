@@ -12,10 +12,11 @@ Fichas técnicas de intervenções mapeadas durante o diagnóstico e a pesquisa 
   CREATE EXTENSION IF NOT EXISTS pg_trgm;
   CREATE INDEX idx_produtos_nome_trgm ON produtos USING gin (nome gin_trgm_ops);
   ```
-- **Ganho esperado:** Substituição do `Seq Scan` por `Bitmap Index Scan`, reduzindo o tempo de consulta de ~9,2 ms para <1 ms.
+- **Ganho esperado:** Substituição do `Seq Scan` por `Bitmap Index Scan`, reduzindo o tempo de consulta de 9,263 ms (Execution Time em [diagnostico/01-explain-queries-linha-de-base.txt](../diagnostico/01-explain-queries-linha-de-base.txt)) para menos de 1 ms (expectativa, não medida).
 - **Custo e Trade-offs:** Índices GIN aumentam o tempo de inserção de novos produtos e ocupam maior volume de armazenamento em disco.
 - **Fonte de referência:** PostgreSQL 16 Documentation: pg_trgm (<https://www.postgresql.org/docs/16/pgtrgm.html>).
 - **Como testar:** Adicionar extensão e índice DDL em script SQL, subir com `docker compose down -v && docker compose up -d`, validar contrato com `scripts/verificar-contrato.sh comparar` e medir com `scripts/medir.sh`.
+- **O que precisaria para testar:** apenas o ambiente atual; o script novo em `banco/` exige recriar o banco do zero.
 
 ---
 
@@ -24,10 +25,11 @@ Fichas técnicas de intervenções mapeadas durante o diagnóstico e a pesquisa 
 - **Problema atual:** A rota processa e agrega 1,5 milhão de itens a cada chamada, gerando latência na casa dos 4,7 a 5,5 segundos mesmo após a indexação básica.
 - **Intervenção proposta:**
   Implementar cache em memória no Node.js (via Map LRU ou Redis leve) com tempo de expiração curto (TTL de 30 a 60 segundos).
-- **Ganho esperado:** Queda da latência de ~4.700 ms para submilissegundo para requisições com cache quente.
+- **Ganho esperado:** Queda da latência de ~4.700 ms para submilissegundo para requisições com cache quente (expectativa, não medida).
 - **Custo e Trade-offs:** Potencial inconsistência eventual transitória caso novas vendas ocorram dentro da janela do TTL.
-- **Fonte de referência:** Martin Fowler, *Patterns of Enterprise Application Architecture* (Gateway Caching).
+- **Fonte de referência:** Redis Documentation: EXPIRE — tempo de expiração (TTL) de chaves (<https://redis.io/docs/latest/commands/expire/>).
 - **Como testar:** Inserir middleware de cache em memória em `api/src/rotas.js`, validar o contrato com `scripts/verificar-contrato.sh comparar` e avaliar p95 sob carga com `scripts/medir.sh`.
+- **O que precisaria para testar:** definir a política de invalidação/TTL e, se a opção for Redis em vez de `Map` local, um serviço extra no compose — com o custo de CPU e memória contabilizado na medição.
 
 ---
 
@@ -42,6 +44,7 @@ Fichas técnicas de intervenções mapeadas durante o diagnóstico e a pesquisa 
 - **Ganho esperado:** Maior retenção de páginas de dados e índices no pool de buffers compartilhados (`shared hit`), diminuindo a necessidade de I/O em disco sob concorrência.
 - **Fonte de referência:** PostgreSQL 16 Documentation: Resource Consumption (<https://www.postgresql.org/docs/16/runtime-config-resource.html>).
 - **Como testar:** Aplicar as flags no `docker-compose.yml`, reiniciar a stack e comparar taxas de cache hit e tempo de resposta geral.
+- **O que precisaria para testar:** reiniciar o banco com as flags e ler `pg_stat_database` (`blks_hit`/`blks_read`) antes e depois; nenhum dado novo é necessário.
 
 ---
 
@@ -52,8 +55,9 @@ Fichas técnicas de intervenções mapeadas durante o diagnóstico e a pesquisa 
   Adicionar paginação orientada a chaves (Keyset Pagination) utilizando `WHERE criado_em < $cursor_data OR (criado_em = $cursor_data AND id < $cursor_id)`.
 - **Ganho esperado:** Custo de consulta constante $O(1)$ independentemente da profundidade da página navegada.
 - **Custo e Trade-offs:** Exigiria adaptação da assinatura dos parâmetros da API (de `pagina=N` para `cursor=token`), demandando alteração contratual que o edital atual veda.
-- **Fonte de referência:** Markus Winand, *Use The Index, Luke!* — Paging Through Results.
+- **Fonte de referência:** Markus Winand. *We need tool support for keyset pagination*. Use The Index, Luke!, 2014 (atualizado em 2023) — <https://use-the-index-luke.com/no-offset>.
 - **Como testar:** Em evolução arquitetural que permita atualização do contrato de paginação da API.
+- **O que precisaria para testar:** mudar a assinatura de `/pedidos` (de `pagina=N` para `cursor=token`), o que altera o contrato e, portanto, não é permitido neste desafio.
 
 ---
 
@@ -65,3 +69,4 @@ Fichas técnicas de intervenções mapeadas durante o diagnóstico e a pesquisa 
 - **Ganho esperado:** Liberação de tempo de Event Loop do Node.js, prevenindo eventuais atrasos de enfileiramento em requisições de alta concorrência.
 - **Fonte de referência:** Node.js 20 LTS Documentation: Process I/O & Synchronous Writes (<https://nodejs.org/docs/latest-v20.x/api/process.html#a-note-on-process-io>).
 - **Como testar:** Substituir a chamada de log em `api/src/server.js`, validar contrato e medir estabilidade de vazão.
+- **O que precisaria para testar:** trocar o `console.log` por `pino` (uma dependência nova) e medir o atraso do Event Loop sob a mesma carga.

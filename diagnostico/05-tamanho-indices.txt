@@ -1,0 +1,32 @@
+# Tamanho dos indices de banco/03-indices.sql
+# data: 2026-11-15T16:54:16-03:00
+# comando: docker compose exec -T banco psql -U loja -d loja -c "SELECT indexrelname, pg_size_pretty(pg_relation_size(indexrelid)) AS tamanho FROM pg_stat_user_indexes ORDER BY pg_relation_size(indexrelid) DESC;"
+
+         indexrelname          | tamanho  |  bytes   
+-------------------------------+----------+----------
+ idx_itens_pedido_pedido_id_id | 32 MB    | 33718272
+ itens_pedido_pkey             | 32 MB    | 33710080
+ idx_pedidos_status_criado_em  | 21 MB    | 22118400
+ idx_pedidos_cliente_criado_em | 19 MB    | 20299776
+ pedidos_pkey                  | 11 MB    | 11255808
+ idx_itens_pedido_produto_id   | 10224 kB | 10469376
+ idx_clientes_lower_email      | 4792 kB  |  4907008
+ idx_pedidos_criado_em_date    | 3176 kB  |  3252224
+ clientes_pkey                 | 2208 kB  |  2260992
+ produtos_pkey                 | 456 kB   |   466944
+(10 rows)
+
+
+ total_indices | total_bytes 
+---------------+-------------
+ 136 MB        |   142458880
+(1 row)
+
+
+# Total apenas dos 6 indices criados em banco/03-indices.sql
+ total_6_indices | total_bytes 
+-----------------+-------------
+ 90 MB           |    94765056
+(1 row)
+
+# observacao: pg_size_pretty exibe MB em base 1024; 90 MB = 90,4 MiB = 94.765.056 bytes
